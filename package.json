@@ -1,12 +1,15 @@
 {
-  "name": "ai-tagger-universe",
-  "version": "1.0.12",
+  "name": "dev-ai-tagger",
+  "version": "0.0.1",
   "description": "Automatically analyze note content and add relevant tags using AI",
-  "main": "main.js",
+  "main": "dist/main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "npx tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "version": "node version-bump.mjs && git add manifest.json versions.json"
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
+    "version": "node version-bump.mjs && git add manifest.json versions.json",
+    "lint": "eslint . --ext .ts,.js",
+    "lint:fix": "eslint . --ext .ts,.js --fix",
+    "format": "prettier --write \"**/*.{ts,js,json,md}\""
   },
   "keywords": [
     "obsidian",
@@ -23,7 +26,7 @@
     "esbuild": "0.17.3",
     "obsidian": "latest",
     "tslib": "2.4.0",
-    "typescript": "4.7.4"
+    "typescript": "^4.7.4"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"

@@ -1,7 +1,6 @@
 import { LLMServiceConfig, LLMResponse, ConnectionTestResult, ConnectionTestError } from './types';
-import { buildTagPrompt } from './prompts/tagPrompts';
+import { buildTagPrompt, SYSTEM_PROMPT } from './prompts/tagPrompts';
 import { TaggingMode } from './prompts/types';
-import { SYSTEM_PROMPT } from '../utils/constants';
 import { LanguageCode } from './types';
 import { App, Notice } from 'obsidian';
 
@@ -216,6 +215,7 @@ export abstract class BaseLLMService {
             try {
                 const jsonResponse = JSON.parse(response.trim());
                 
+                /*
                 // For Hybrid mode, check for both matched and suggested tags
                 if (mode === TaggingMode.Hybrid) {
                     // Check if the response has the expected hybrid format
@@ -245,28 +245,20 @@ export abstract class BaseLLMService {
                         };
                     }
                 }
+                */
                 
                 // If we have a valid JSON response with tags
                 if (Array.isArray(jsonResponse.tags)) {
                     const processedTags = this.processTagsFromResponse(jsonResponse);
                     
-                    // Apply tags according to mode
-                    switch (mode) {
-                        case TaggingMode.PredefinedTags:
-                            return {
-                                matchedExistingTags: processedTags.tags.slice(0, maxTags),
-                                suggestedTags: []
-                            };
-                        
-                        case TaggingMode.GenerateNew:
-                        default:
-                            return {
-                                matchedExistingTags: [],
-                                suggestedTags: processedTags.tags.slice(0, maxTags)
-                            };
-                    }
+                    // Apply tags according to mode - only GenerateNew mode now
+                    return {
+                        matchedExistingTags: [],
+                        suggestedTags: processedTags.tags.slice(0, maxTags)
+                    };
                 }
                 
+                /*
                 // Check for matchedTags or newTags fields (backward compatibility)
                 if (Array.isArray(jsonResponse.matchedTags) && mode === TaggingMode.PredefinedTags) {
                     return {
@@ -274,6 +266,7 @@ export abstract class BaseLLMService {
                         suggestedTags: []
                     };
                 }
+                */
                 
                 if (Array.isArray(jsonResponse.newTags) && mode === TaggingMode.GenerateNew) {
                     return {
@@ -295,29 +288,11 @@ export abstract class BaseLLMService {
             // Process the text response
             const processedResponse = this.processTagsFromResponse(cleanedResponse);
             
-            // Return tags according to mode
-            switch (mode) {
-                case TaggingMode.PredefinedTags:
-                    return {
-                        matchedExistingTags: processedResponse.tags.slice(0, maxTags),
-                        suggestedTags: []
-                    };
-                
-                case TaggingMode.Hybrid:
-                    // For text responses in hybrid mode, we don't know which are matched vs suggested
-                    // We'll conservatively use them all as suggested tags
-                    return {
-                        matchedExistingTags: [],
-                        suggestedTags: processedResponse.tags.slice(0, maxTags)
-                    };
-                
-                case TaggingMode.GenerateNew:
-                default:
-                    return {
-                        matchedExistingTags: [],
-                        suggestedTags: processedResponse.tags.slice(0, maxTags)
-                    };
-            }
+            // Return tags according to mode - only GenerateNew mode now
+            return {
+                matchedExistingTags: [],
+                suggestedTags: processedResponse.tags.slice(0, maxTags)
+            };
         } catch (error) {
             //console.error('Error parsing LLM response:', error);
             throw new Error(`Invalid response format: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -531,6 +506,7 @@ export abstract class BaseLLMService {
                     prompt = this.buildPrompt(content, [], mode, maxTags, language);
                     break;
                     
+                /*    
                 case TaggingMode.PredefinedTags:
                     // For predefined tags mode, validate candidate tags exist
                     if (!candidateTags || candidateTags.length === 0) {
@@ -549,10 +525,11 @@ export abstract class BaseLLMService {
                         prompt = this.buildPrompt(content, candidateTags, mode, maxTags, language);
                     }
                     break;
+                */
                     
                 default:
-                    // Default behavior for future or unknown modes
-                    prompt = this.buildPrompt(content, candidateTags, mode, maxTags, language);
+                    // Default behavior for any mode now falls back to GenerateNew
+                    prompt = this.buildPrompt(content, [], TaggingMode.GenerateNew, maxTags, language);
             }
 
             if (!prompt.trim()) {

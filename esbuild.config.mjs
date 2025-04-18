@@ -1,6 +1,8 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import fs from "fs";
+import path from "path";
 
 const banner =
 `/*
@@ -10,6 +12,23 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = process.argv[2] === "production";
+
+// Create dist directory if it doesn't exist
+const distDir = path.join(process.cwd(), "dist");
+if (!fs.existsSync(distDir)) {
+  fs.mkdirSync(distDir, { recursive: true });
+}
+
+// Copy static files to dist folder
+const filesToCopy = ["styles.css", "manifest.json"];
+filesToCopy.forEach(file => {
+  const sourcePath = path.join(process.cwd(), file);
+  const destPath = path.join(distDir, file);
+  if (fs.existsSync(sourcePath)) {
+    fs.copyFileSync(sourcePath, destPath);
+    console.log(`Copied ${file} to dist folder`);
+  }
+});
 
 esbuild.build({
   banner: {
@@ -38,7 +57,7 @@ esbuild.build({
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
-  outfile: "main.js"
+  outfile: "dist/main.js"
 }).catch(() => process.exit(1));
 if (!prod) {
   console.log("Watching for changes...");

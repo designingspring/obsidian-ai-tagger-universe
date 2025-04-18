@@ -1,6 +1,6 @@
 import { BaseLLMService } from "../baseService";
 import { AdapterConfig } from "./types";
-import { SYSTEM_PROMPT } from "../../utils/constants";
+import { SYSTEM_PROMPT } from "../prompts/tagPrompts";
 import { TaggingMode } from "../prompts/types";
 
 export abstract class BaseAdapter extends BaseLLMService {
@@ -123,7 +123,8 @@ export abstract class BaseAdapter extends BaseLLMService {
     }
 
     async analyzeTags(content: string, existingTags: string[]): Promise<any> {
-        const prompt = this.buildPrompt(content, existingTags, TaggingMode.Hybrid, 10, this.config.language);
+        // Using GenerateNew mode instead of Hybrid
+        const prompt = this.buildPrompt(content, [], TaggingMode.GenerateNew, 10, this.config.language);
         const response = await this.makeRequest(prompt);
         return this.parseResponse(response);
     }

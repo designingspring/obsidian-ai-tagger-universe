@@ -1,12 +1,4 @@
 /**
- * Default system prompt for AI tag analysis
- */
-export const SYSTEM_PROMPT = 
-    'You are a professional document tag analysis assistant. ' +
-    'Please return your response as a plain text string of comma-separated tags. ' +
-    'For example: "hello, world, hello world, hello-world"';
-
-/**
  * Maximum number of concurrent requests to external APIs
  */
 export const MAX_CONCURRENT_REQUESTS = 3;
