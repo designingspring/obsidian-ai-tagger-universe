@@ -6,12 +6,47 @@ import AITaggerPlugin from '../../main';
 
 export const TAG_NETWORK_VIEW = "tag-network-view";
 
-// Define a very loose type for d3 to avoid type errors
+// Define types for working with D3
 declare global {
     interface Window {
-        // @ts-ignore
-        d3: any; 
+        d3: any; // D3 is loaded dynamically at runtime
     }
+}
+
+// D3 specific interfaces for type safety
+interface D3Node {
+    id: string;
+    label: string;
+    size: number;
+    frequency: number;
+    x?: number;
+    y?: number;
+    fx?: number | null;
+    fy?: number | null;
+}
+
+interface D3Link {
+    source: string | D3Node;
+    target: string | D3Node;
+    weight: number;
+}
+
+interface D3Event {
+    active?: number;
+    subject?: D3Node;
+    transform?: any;
+    x?: number;
+    y?: number;
+}
+
+interface D3Simulation {
+    force: (name: string, force: any) => D3Simulation;
+    nodes: (nodes: D3Node[]) => D3Simulation;
+    alpha: (value: number) => D3Simulation;
+    alphaTarget: (target: number) => D3Simulation;
+    restart: () => D3Simulation;
+    stop: () => D3Simulation;
+    on: (event: string, callback: () => void) => D3Simulation;
 }
 
 export class TagNetworkView extends ItemView {
