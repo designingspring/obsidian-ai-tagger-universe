@@ -1,9 +1,11 @@
 import { Setting, Notice } from 'obsidian';
-import type AITaggerPlugin from '../../main';
 import { TaggingMode } from '../../services/prompts/types';
 import { BaseSettingSection } from './BaseSettingSection';
 import { LanguageUtils } from '../../utils/languageUtils';
 import { ExcludedFilesModal } from '../modals/ExcludedFilesModal';
+import { BatchTaggingModal } from '../modals/BatchTaggingModal';
+import { TagUtils } from '../../utils/tagUtils';
+import { LanguageCode } from '../../services/types';
 
 export class TaggingSettingsSection extends BaseSettingSection {
     private tagSourceSetting: Setting | null = null;
@@ -26,16 +28,16 @@ export class TaggingSettingsSection extends BaseSettingSection {
     }
 
     display(): void {
-        this.containerEl.createEl('h1', { text: 'Tagging settings' });
+        this.containerEl.createEl('h1', { text: 'Tagging Settings' });
 
         new Setting(this.containerEl)
             .setName('Tagging mode')
             .setDesc('Choose how tags should be generated')
             .addDropdown(dropdown => dropdown
                 .addOptions({
-                    [TaggingMode.PredefinedTags]: 'Use predefined tags only',
+                    // [TaggingMode.PredefinedTags]: 'Use predefined tags only',
                     [TaggingMode.GenerateNew]: 'Generate new tags',
-                    [TaggingMode.Hybrid]: 'Hybrid mode (Generate + Predefined)'
+                    // [TaggingMode.Hybrid]: 'Hybrid mode (Generate + Predefined)'
                 })
                 .setValue(this.plugin.settings.taggingMode)
                 .onChange(async (value) => {
@@ -294,8 +296,56 @@ export class TaggingSettingsSection extends BaseSettingSection {
         // Apply initial visibility
         this.updateVisibility();
 
-        // File exclusion Setting
-        this.containerEl.createEl('h3', { text: 'File exclusion' });
+        new Setting(this.containerEl)
+            .setName('Output language')
+            .setDesc('Language for generating tags')
+            .addDropdown(dropdown => {
+                // Add language options
+                const options: Record<string, string> = LanguageUtils.getLanguageOptions();
+
+                return dropdown
+                    .addOptions(options)
+                    .setValue(this.plugin.settings.language)
+                    .onChange(async (value) => {
+                        this.plugin.settings.language = value as LanguageCode;
+                        await this.plugin.saveSettings();
+                    });
+            });
+
+        // Batch Tagging Section
+        this.containerEl.createEl('h3', { text: 'Batch Tagging' });
+        
+        const batchTaggingSetting = new Setting(this.containerEl)
+            .setName('Batch tag files')
+            .setDesc('All files matching these patterns will be tagged.');
+
+        batchTaggingSetting.addButton(button => 
+            button
+                .setButtonText('Manage')
+                .setCta()
+                .onClick(() => {
+                    // Open the BatchTaggingModal to select a folder
+                    const modal = new BatchTaggingModal(
+                        this.plugin.app,
+                        this.plugin,
+                        async (folders: string[]) => {
+                            // Callback when filters are selected and Start Tagging is clicked
+                            // For backwards compatibility, use only the first folder in batchTaggingFolder
+                            this.plugin.settings.batchTaggingFolder = folders.length > 0 ? folders[0] : '';
+                            // Store the full list elsewhere so we can use it later
+                            this.plugin.settings.batchTaggingFolders = folders;
+                            await this.plugin.saveSettings();
+                            
+                            // Execute batch tagging
+                            await this.executeBatchTagging();
+                        }
+                    );
+                    modal.open();
+                })
+        );
+
+        // File Exclusion Setting
+        this.containerEl.createEl('h3', { text: 'File Exclusion' });
         
         const excludedFoldersSetting = new Setting(this.containerEl)
             .setName('Excluded files and folders')
@@ -342,7 +392,29 @@ export class TaggingSettingsSection extends BaseSettingSection {
         );
 
         // Tag Range Settings
-        this.containerEl.createEl('h3', { text: 'Tag range settings' });
+        this.containerEl.createEl('h3', { text: 'Tag Range Settings' });
+
+        new Setting(this.containerEl)
+            .setName('Maximum new tags')
+            .setDesc('Maximum number of new tags to generate (0-10). Used in Generate and Hybrid modes.')
+            .addSlider(slider => {
+                const container = slider.sliderEl.parentElement;
+                if (container) {
+                    const numberDisplay = container.createSpan({ cls: 'value-display' });
+                    numberDisplay.style.marginLeft = '10px';
+                    numberDisplay.setText(String(this.plugin.settings.tagRangeGenerateMax));
+
+                    slider.setLimits(0, 10, 1)
+                        .setValue(this.plugin.settings.tagRangeGenerateMax)
+                        .setDynamicTooltip()
+                        .onChange(async (value) => {
+                            numberDisplay.setText(String(value));
+                            this.plugin.settings.tagRangeGenerateMax = value;
+                            await this.plugin.saveSettings();
+                        });
+                }
+                return slider;
+            });
 
         new Setting(this.containerEl)
             .setName('Maximum predefined tags')
@@ -365,43 +437,121 @@ export class TaggingSettingsSection extends BaseSettingSection {
                 }
                 return slider;
             });
+    }
 
-        new Setting(this.containerEl)
-            .setName('Maximum generated tags')
-            .setDesc('Maximum number of new tags to generate (0-10). Used in Generate and Hybrid modes.')
-            .addSlider(slider => {
-                const container = slider.sliderEl.parentElement;
-                if (container) {
-                    const numberDisplay = container.createSpan({ cls: 'value-display' });
-                    numberDisplay.style.marginLeft = '10px';
-                    numberDisplay.setText(String(this.plugin.settings.tagRangeGenerateMax));
-                    
-                    slider.setLimits(0, 10, 1)
-                        .setValue(this.plugin.settings.tagRangeGenerateMax)
-                        .setDynamicTooltip()
-                        .onChange(async (value) => {
-                            numberDisplay.setText(String(value));
-                            this.plugin.settings.tagRangeGenerateMax = value;
-                            await this.plugin.saveSettings();
-                        });
+    private async executeBatchTagging(): Promise<void> {
+        const folders = this.plugin.settings.batchTaggingFolders || 
+            (this.plugin.settings.batchTaggingFolder ? [this.plugin.settings.batchTaggingFolder] : []);
+            
+        if (folders.length === 0) {
+            new Notice('Please select at least one filter first');
+            return;
+        }
+        
+        // Get all markdown files in the selected folders
+        const files = this.plugin.app.vault.getMarkdownFiles().filter(file => {
+            // Check if the file matches any of the filter patterns
+            return folders.some((folder: string) => {
+                // Check for regex pattern (enclosed in /)
+                if (folder.startsWith('/') && folder.endsWith('/') && folder.length > 2) {
+                    try {
+                        const regex = new RegExp(folder.slice(1, -1));
+                        return regex.test(file.path);
+                    } catch (e) {
+                        return false;
+                    }
                 }
-                return slider;
+                // Simple glob-like matching (* as wildcard)
+                else if (folder.includes('*')) {
+                    const regexPattern = folder.replace(/\*/g, '.*');
+                    try {
+                        const regex = new RegExp(`^${regexPattern}$`);
+                        return regex.test(file.path);
+                    } catch (e) {
+                        return false;
+                    }
+                }
+                // Direct path or folder matching
+                else {
+                    return file.path.startsWith(folder + '/') || file.path === folder;
+                }
             });
-
-        new Setting(this.containerEl)
-            .setName('Output language')
-            .setDesc('Language for generating tags')
-            .addDropdown(dropdown => {
-                // Add language options
-                const options: Record<string, string> = LanguageUtils.getLanguageOptions();
+        });
+        
+        if (files.length === 0) {
+            new Notice('No markdown files found matching the filter patterns');
+            return;
+        }
+        
+        // Ask for confirmation
+        const confirmed = window.confirm(`This will tag ${files.length} notes matching your filters. Continue?`);
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        // Show progress
+        const statusBarItem = this.plugin.addStatusBarItem();
+        statusBarItem.setText('Batch tagging in progress...');
+        
+        let processed = 0;
+        const total = files.length;
+        
+        // Process files
+        for (const file of files) {
+            try {
+                const content = await this.plugin.app.vault.read(file);
                 
-                return dropdown
-                    .addOptions(options)
-                    .setValue(this.plugin.settings.language)
-                    .onChange(async (value) => {
-                        this.plugin.settings.language = value as any;
-                        await this.plugin.saveSettings();
-                    });
-            });
+                // Use the same tagging logic as in the main plugin
+                const analysis = await this.plugin.llmService.analyzeTags(
+                    content, 
+                    [], 
+                    TaggingMode.GenerateNew,
+                    this.plugin.settings.tagRangeGenerateMax,
+                    this.plugin.settings.language as LanguageCode
+                );
+                
+                // If we got tags back, update the file
+                if (analysis.tags && analysis.tags.length > 0) {
+                    // Get file metadata
+                    const fileCache = this.plugin.app.metadataCache.getFileCache(file);
+                    const frontmatter = fileCache?.frontmatter;
+                    
+                    // Prepare new tags
+                    const existingTags = frontmatter?.tags || [];
+                    
+                    // Convert existing tags to array if it's a string
+                    const existingTagsArray = Array.isArray(existingTags) ? existingTags : [existingTags];
+                    
+                    // Combine existing and new tags, removing duplicates
+                    const allTags = [...new Set([...existingTagsArray, ...analysis.tags])];
+                    
+                    // Update the file's frontmatter
+                    await TagUtils.writeTagsToFrontmatter(
+                        this.plugin.app,
+                        file,
+                        allTags,
+                        this.plugin.settings.replaceTags
+                    );
+                }
+                
+                processed++;
+                statusBarItem.setText(`Batch tagging progress: ${processed}/${total}`);
+            } catch (error) {
+                // Handle the error without using console.error
+                processed++;
+                statusBarItem.setText(`Error with file ${file.path}. Continuing...`);
+            }
+        }
+        
+        // Update status when complete
+        statusBarItem.setText(`Batch tagging complete: ${processed}/${total} files processed`);
+        
+        // Remove status bar after 5 seconds
+        setTimeout(() => {
+            statusBarItem.remove();
+        }, 5000);
+        
+        new Notice(`Batch tagging complete: ${processed}/${total} files processed`);
     }
 }

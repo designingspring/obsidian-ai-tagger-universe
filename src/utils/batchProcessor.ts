@@ -15,7 +15,7 @@ export interface BatchProcessResult {
 
 export class BatchProcessor {
     private readonly options: BatchProcessorOptions;
-    private isCancelled: boolean = false;
+    private isCancelled = false;
 
     constructor(options: Partial<BatchProcessorOptions> = {}) {
         this.options = {

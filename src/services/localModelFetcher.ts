@@ -1,9 +1,15 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+/**
+ * Fetches available models from local LLM services
+ */
 export async function fetchLocalModels(endpoint: string): Promise<string[]> {
     try {
         const baseUrl = normalizeEndpoint(endpoint);
         const isOllama = baseUrl.includes('localhost:11434') || baseUrl.includes('ollama');
-        const isLocalAI = baseUrl.includes('localhost:8080') || baseUrl.includes('localai');
-        const isLMStudio = baseUrl.includes('localhost:1234') || baseUrl.includes('lm_studio');
+        // Variables kept but not used - can be uncommented when needed
+        // const isLocalAI = baseUrl.includes('localhost:8080') || baseUrl.includes('localai');
+        // const isLMStudio = baseUrl.includes('localhost:1234') || baseUrl.includes('lm_studio');
         
         // Special handling for Ollama
         if (isOllama) {
@@ -97,6 +103,9 @@ export async function fetchLocalModels(endpoint: string): Promise<string[]> {
     }
 }
 
+/**
+ * Normalizes an endpoint URL by removing trailing slashes and specific paths
+ */
 function normalizeEndpoint(endpoint: string): string {
     endpoint = endpoint.trim();
     endpoint = endpoint.replace(/\/$/, '');

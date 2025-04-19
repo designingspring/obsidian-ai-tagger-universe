@@ -1,12 +1,13 @@
 {
-  "id": "ai-tagger-universe",
-  "name": "AI Tagger Universe",
-  "version": "1.0.12",
+  "id": "ai-tagger",
+  "name": "AI Tagger",
+  "version": "0.0.1",
   "minAppVersion": "1.4.0",
   "description": "Automatically analyze note content and add relevant tags using AI",
-  "author": "Nie Hu",
-  "authorUrl": "https://github.com/niehu2018",
-  "isDesktopOnly": false,
-  "fundingUrl": "https://buymeacoffee.com/niehu2015o",
-  "repo": "niehu2018/obsidian-ai-tagger-universe"
+  "author": "Nie Hu & Desiging Spring",
+  "authorUrl": "https://github.com/designingspring",
+  "isDesktopOnly": true,
+  "repo": "designingspring/obsidian-ai-tagger-universe",
+  "main": "dist/main.js",
+  "styles": "dist/styles.css"
 }

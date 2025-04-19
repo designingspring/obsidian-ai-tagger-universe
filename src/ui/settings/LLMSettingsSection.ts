@@ -1,5 +1,4 @@
 import { Setting, ButtonComponent, Notice } from 'obsidian';
-import type AITaggerPlugin from '../../main';
 import { ConnectionTestResult } from '../../services';
 import { BaseSettingSection } from './BaseSettingSection';
 
@@ -8,7 +7,7 @@ export class LLMSettingsSection extends BaseSettingSection {
     private statusEl: HTMLElement | null = null;
 
     display(): void {
-        this.containerEl.createEl('h1', { text: 'LLM settings' });
+        this.containerEl.createEl('h1', { text: 'LLM Settings' });
         this.createServiceTypeDropdown();
         this.plugin.settings.serviceType === 'local' ? 
             this.displayLocalSettings() : 
@@ -188,7 +187,7 @@ export class LLMSettingsSection extends BaseSettingSection {
                     this.settingTab.display();
                 }));
 
-        const modelSetting = new Setting(this.containerEl)
+        new Setting(this.containerEl)
             .setName('Model name')
             .setDesc('Name of the model to use with your local service')
             .addDropdown(async (dropdown) => {

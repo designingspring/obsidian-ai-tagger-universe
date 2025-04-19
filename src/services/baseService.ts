@@ -1,9 +1,8 @@
 import { LLMServiceConfig, LLMResponse, ConnectionTestResult, ConnectionTestError } from './types';
-import { buildTagPrompt } from './prompts/tagPrompts';
+import { buildTagPrompt, TAG_SYSTEM_PROMPT } from './prompts/tagPrompts';
 import { TaggingMode } from './prompts/types';
-import { SYSTEM_PROMPT } from '../utils/constants';
 import { LanguageCode } from './types';
-import { App, Notice } from 'obsidian';
+import { App } from 'obsidian';
 
 /**
  * Base class for LLM service implementations
@@ -33,12 +32,12 @@ export abstract class BaseLLMService {
      * @param language - Optional language code
      * @returns Formatted request body
      */
-    public formatRequest(prompt: string, language?: string): any {
+    public formatRequest(prompt: string, _language?: string): any {
         // Default OpenAI-compatible format
         return {
             model: this.modelName,
             messages: [
-                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'system', content: TAG_SYSTEM_PROMPT },
                 { role: 'user', content: prompt }
             ],
             temperature: 0.3
@@ -216,6 +215,7 @@ export abstract class BaseLLMService {
             try {
                 const jsonResponse = JSON.parse(response.trim());
                 
+                /*
                 // For Hybrid mode, check for both matched and suggested tags
                 if (mode === TaggingMode.Hybrid) {
                     // Check if the response has the expected hybrid format
@@ -245,28 +245,22 @@ export abstract class BaseLLMService {
                         };
                     }
                 }
+                */
                 
                 // If we have a valid JSON response with tags
                 if (Array.isArray(jsonResponse.tags)) {
                     const processedTags = this.processTagsFromResponse(jsonResponse);
+                    const suggestedTags = processedTags.tags.slice(0, maxTags);
                     
-                    // Apply tags according to mode
-                    switch (mode) {
-                        case TaggingMode.PredefinedTags:
-                            return {
-                                matchedExistingTags: processedTags.tags.slice(0, maxTags),
-                                suggestedTags: []
-                            };
-                        
-                        case TaggingMode.GenerateNew:
-                        default:
-                            return {
-                                matchedExistingTags: [],
-                                suggestedTags: processedTags.tags.slice(0, maxTags)
-                            };
-                    }
+                    // Apply tags according to mode - only GenerateNew mode now
+                    return {
+                        matchedExistingTags: [],
+                        suggestedTags: suggestedTags,
+                        tags: suggestedTags // Add combined tags
+                    };
                 }
                 
+                /*
                 // Check for matchedTags or newTags fields (backward compatibility)
                 if (Array.isArray(jsonResponse.matchedTags) && mode === TaggingMode.PredefinedTags) {
                     return {
@@ -274,11 +268,14 @@ export abstract class BaseLLMService {
                         suggestedTags: []
                     };
                 }
+                */
                 
                 if (Array.isArray(jsonResponse.newTags) && mode === TaggingMode.GenerateNew) {
+                    const suggestedTags = jsonResponse.newTags.slice(0, maxTags);
                     return {
                         matchedExistingTags: [],
-                        suggestedTags: jsonResponse.newTags.slice(0, maxTags)
+                        suggestedTags: suggestedTags,
+                        tags: suggestedTags // Add combined tags
                     };
                 }
             } catch (e) {
@@ -286,38 +283,22 @@ export abstract class BaseLLMService {
             }
             
             // Clean up the response
-            let cleanedResponse = response
+            const cleanedResponse = response
                 .replace(/^```.*$/gm, '') // Remove code blocks
-                .replace(/^\s*[\-\*]\s+/gm, '') // Remove list markers
+                .replace(/^\s*[-*]\s+/gm, '') // Remove list markers
                 .replace(/^\s*\d+\.\s+/gm, '') // Remove numbered list markers
                 .trim();
             
             // Process the text response
             const processedResponse = this.processTagsFromResponse(cleanedResponse);
+            const suggestedTags = processedResponse.tags.slice(0, maxTags);
             
-            // Return tags according to mode
-            switch (mode) {
-                case TaggingMode.PredefinedTags:
-                    return {
-                        matchedExistingTags: processedResponse.tags.slice(0, maxTags),
-                        suggestedTags: []
-                    };
-                
-                case TaggingMode.Hybrid:
-                    // For text responses in hybrid mode, we don't know which are matched vs suggested
-                    // We'll conservatively use them all as suggested tags
-                    return {
-                        matchedExistingTags: [],
-                        suggestedTags: processedResponse.tags.slice(0, maxTags)
-                    };
-                
-                case TaggingMode.GenerateNew:
-                default:
-                    return {
-                        matchedExistingTags: [],
-                        suggestedTags: processedResponse.tags.slice(0, maxTags)
-                    };
-            }
+            // Return tags according to mode - only GenerateNew mode now
+            return {
+                matchedExistingTags: [],
+                suggestedTags: suggestedTags,
+                tags: suggestedTags // Add combined tags
+            };
         } catch (error) {
             //console.error('Error parsing LLM response:', error);
             throw new Error(`Invalid response format: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -340,7 +321,7 @@ export abstract class BaseLLMService {
             }
             
             // Convert any input to a processable string
-            let textContent: string = '';
+            let textContent = '';
             
             if (typeof content === 'string') {
                 // Use string content directly
@@ -376,20 +357,21 @@ export abstract class BaseLLMService {
                 
                 // If no standard fields, try to extract any possible string
                 if (!textContent) {
-                    for (const [key, value] of Object.entries(content)) {
+                    Object.entries(content).some(([, value]) => {
                         if (typeof value === 'string' && value.trim()) {
                             textContent = value.trim();
-                            //console.log(`Using string value from field "${key}":`, textContent);
-                            break;
+                            //console.log(`Using string value from field:`, textContent);
+                            return true;
                         } else if (Array.isArray(value) && value.length > 0) {
                             // Try simple arrays
                             textContent = value
                                 .filter((item: any) => item !== null && item !== undefined)
                                 .join(', ');
-                            //console.log(`Using array value from field "${key}":`, textContent);
-                            break;
+                            //console.log(`Using array value from field:`, textContent);
+                            return true;
                         }
-                    }
+                        return false;
+                    });
                 }
             }
             
@@ -508,7 +490,7 @@ export abstract class BaseLLMService {
         content: string, 
         candidateTags: string[], 
         mode: TaggingMode = TaggingMode.GenerateNew,
-        maxTags: number = 10,
+        maxTags = 10,
         language?: LanguageCode
     ): Promise<LLMResponse> {
         try {
@@ -531,6 +513,7 @@ export abstract class BaseLLMService {
                     prompt = this.buildPrompt(content, [], mode, maxTags, language);
                     break;
                     
+                /*    
                 case TaggingMode.PredefinedTags:
                     // For predefined tags mode, validate candidate tags exist
                     if (!candidateTags || candidateTags.length === 0) {
@@ -549,10 +532,11 @@ export abstract class BaseLLMService {
                         prompt = this.buildPrompt(content, candidateTags, mode, maxTags, language);
                     }
                     break;
+                */
                     
                 default:
-                    // Default behavior for future or unknown modes
-                    prompt = this.buildPrompt(content, candidateTags, mode, maxTags, language);
+                    // Default behavior for any mode now falls back to GenerateNew
+                    prompt = this.buildPrompt(content, [], TaggingMode.GenerateNew, maxTags, language);
             }
 
             if (!prompt.trim()) {

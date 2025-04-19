@@ -1,9 +1,9 @@
+import { App } from 'obsidian';
 import { LLMResponse, LLMServiceConfig, ConnectionTestResult, ConnectionTestError } from './types';
-import { SYSTEM_PROMPT } from '../utils/constants';
+import { TAG_SYSTEM_PROMPT } from './prompts/tagPrompts';
 import { BaseLLMService } from './baseService';
 import { TaggingMode } from './prompts/types';
 import { LanguageCode } from './types';
-import { App } from 'obsidian';
 
 export class LocalLLMService extends BaseLLMService {
     private readonly MAX_CONTENT_LENGTH = 4000;
@@ -206,7 +206,7 @@ export class LocalLLMService extends BaseLLMService {
                 messages: [
                     {
                         role: 'system',
-                        content: SYSTEM_PROMPT
+                        content: TAG_SYSTEM_PROMPT
                     },
                     {
                         role: 'user',
