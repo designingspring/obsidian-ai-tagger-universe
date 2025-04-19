@@ -2,6 +2,35 @@ import { BaseAdapter } from './baseAdapter';
 import { BaseResponse, RequestBody, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
 
+// Define interface for different Bedrock model response formats
+interface BedrockClaudeResponse {
+    completion?: string;
+}
+
+interface BedrockTitanResponse {
+    results?: Array<{
+        outputText?: string;
+    }>;
+}
+
+interface BedrockGenericResponse {
+    generation?: string;
+}
+
+// Combined type for all Bedrock response formats
+type BedrockResponse = BedrockClaudeResponse & BedrockTitanResponse & BedrockGenericResponse;
+
+// Define interface for Bedrock error response structure
+interface BedrockErrorResponse {
+    errorMessage?: string;
+    response?: {
+        data?: {
+            errorMessage?: string;
+        };
+    };
+    message?: string;
+}
+
 export class BedrockAdapter extends BaseAdapter {
     private readonly defaultConfig = {
         max_tokens: 1024,
@@ -61,17 +90,18 @@ export class BedrockAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    public parseResponse(response: Record<string, unknown>): BaseResponse {
         try {
+            const bedrockResponse = response as BedrockResponse;
             let content = '';
             const modelName = this.config.modelName || '';
             
             if (modelName.includes('claude')) {
-                content = response.completion || '';
+                content = bedrockResponse.completion || '';
             } else if (modelName.includes('titan')) {
-                content = response.results?.[0]?.outputText || '';
+                content = bedrockResponse.results?.[0]?.outputText || '';
             } else {
-                content = response.generation || '';
+                content = bedrockResponse.generation || '';
             }
 
             if (!content) {
@@ -108,10 +138,15 @@ export class BedrockAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
-        return error.errorMessage ||
-            error.response?.data?.errorMessage ||
-            error.message ||
+    public extractError(error: Record<string, unknown> | Error): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+        
+        const errorObj = error as BedrockErrorResponse;
+        return errorObj.errorMessage ||
+            errorObj.response?.data?.errorMessage ||
+            errorObj.message ||
             'Unknown error occurred';
     }
 

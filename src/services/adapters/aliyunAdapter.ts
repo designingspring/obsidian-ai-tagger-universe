@@ -2,6 +2,41 @@ import { BaseAdapter } from './baseAdapter';
 import { BaseResponse, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
 
+// Define interface for Aliyun response structure
+interface AliyunResponse {
+    choices?: Array<{
+        message?: {
+            content?: string;
+        };
+    }>;
+    error?: {
+        message: string;
+    };
+}
+
+// Define interface for Aliyun error response structure
+interface AliyunErrorResponse {
+    response?: {
+        data?: {
+            error?: {
+                message: string;
+            };
+        };
+    };
+    message?: string;
+}
+
+// Define interface for extracted JSON content
+interface ExtractedTagContent {
+    matchedTags?: string[];
+    newTags?: string[];
+    matchedExistingTags?: string[];
+    existingTags?: string[];
+    suggestedTags?: string[];
+    generatedTags?: string[];
+    tags?: string[];
+}
+
 export class AliyunAdapter extends BaseAdapter {
     constructor(config: AdapterConfig) {
         super({
@@ -23,15 +58,16 @@ export class AliyunAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    public parseResponse(response: Record<string, unknown>): BaseResponse {
         try {
-            const content = response.choices?.[0]?.message?.content;
+            const aliyunResponse = response as AliyunResponse;
+            const content = aliyunResponse.choices?.[0]?.message?.content;
             if (!content) {
                 throw new Error('Invalid response format: missing content');
             }
             
             // Try to extract JSON from the content
-            let jsonContent;
+            let jsonContent: ExtractedTagContent | undefined;
             try {
                 jsonContent = this.extractJsonFromContent(content);
             } catch (jsonError) {
@@ -40,7 +76,9 @@ export class AliyunAdapter extends BaseAdapter {
                 // Fallback: Try to parse the content directly if it might be JSON already
                 try {
                     if (typeof content === 'string' && (content.trim().startsWith('{') && content.trim().endsWith('}'))) {
-                        jsonContent = JSON.parse(content);
+                        jsonContent = JSON.parse(content) as ExtractedTagContent;
+                    } else {
+                        throw new Error('Not a valid JSON string');
                     }
                 } catch (directParseError) {
                     //console.error('Direct JSON parse error:', directParseError);
@@ -114,11 +152,16 @@ export class AliyunAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
-        if (error.response?.data?.error?.message) {
-            return error.response.data.error.message;
+    public extractError(error: Record<string, unknown> | Error): string {
+        if (error instanceof Error) {
+            return error.message;
         }
-        return error.message || 'Unknown error occurred';
+        
+        const errorObj = error as AliyunErrorResponse;
+        if (errorObj.response?.data?.error?.message) {
+            return errorObj.response.data.error.message;
+        }
+        return errorObj.message || 'Unknown error occurred';
     }
 
     public getHeaders(): Record<string, string> {

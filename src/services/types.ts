@@ -1,4 +1,5 @@
 import { TaggingMode } from './prompts/types';
+import { RequestBody } from './adapters/types';
 
 export const MAX_CONCURRENT_REQUESTS = 3;
 
@@ -52,7 +53,7 @@ export interface LLMService {
     
     testConnection(): Promise<{ result: ConnectionTestResult; error?: ConnectionTestError }>;
     
-    formatRequest(prompt: string, language?: string): any;
+    formatRequest(prompt: string, language?: string): RequestBody;
     
     dispose(): Promise<void>;
 }

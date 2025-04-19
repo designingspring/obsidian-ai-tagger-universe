@@ -2,6 +2,33 @@ import { BaseAdapter } from './baseAdapter';
 import { BaseResponse, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
 
+// Define specific interface for OpenRouter responses
+interface OpenRouterResponse {
+    choices?: Array<{
+        message?: {
+            content?: string;
+        };
+    }>;
+    error?: {
+        message: string;
+    };
+}
+
+// Define specific interface for OpenRouter error responses
+interface OpenRouterErrorResponse {
+    error?: {
+        message: string;
+    };
+    response?: {
+        data?: {
+            error?: {
+                message: string;
+            };
+        };
+    };
+    message?: string;
+}
+
 export class OpenRouterAdapter extends BaseAdapter {
     constructor(config: AdapterConfig) {
         super({
@@ -22,9 +49,11 @@ export class OpenRouterAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    public parseResponse(response: Record<string, unknown>): BaseResponse {
         try {
-            const content = response.choices?.[0]?.message?.content;
+            const openRouterResponse = response as OpenRouterResponse;
+            const content = openRouterResponse.choices?.[0]?.message?.content;
+            
             if (!content) {
                 throw new Error('Invalid response format: missing content');
             }
@@ -59,10 +88,15 @@ export class OpenRouterAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
-        return error.error?.message ||
-            error.response?.data?.error?.message ||
-            error.message ||
+    public extractError(error: Record<string, unknown> | Error): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+
+        const errorObj = error as OpenRouterErrorResponse;
+        return errorObj.error?.message ||
+            errorObj.response?.data?.error?.message ||
+            errorObj.message ||
             'Unknown error occurred';
     }
 

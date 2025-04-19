@@ -43,9 +43,9 @@ export class CohereAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    public parseResponse(response: unknown): BaseResponse {
         try {
-            const content = response.text;
+            const content = (response as Record<string, unknown>).text as string;
             if (!content) {
                 throw new Error('Invalid response format: missing content');
             }
@@ -77,10 +77,28 @@ export class CohereAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
-        return error.message ||
-            error.response?.data?.message ||
-            'Unknown error occurred';
+    public extractError(error: unknown): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+        
+        const errorObj = error as Record<string, unknown>;
+        
+        // Check if message exists directly
+        if (typeof errorObj.message === 'string') {
+            return errorObj.message;
+        }
+        
+        // Check for nested response data
+        const response = errorObj.response as Record<string, unknown> | undefined;
+        if (response && typeof response === 'object') {
+            const data = response.data as Record<string, unknown> | undefined;
+            if (data && typeof data === 'object' && typeof data.message === 'string') {
+                return data.message;
+            }
+        }
+        
+        return 'Unknown error occurred';
     }
 
     public getHeaders(): Record<string, string> {

@@ -3,6 +3,20 @@ import { BaseResponse, RequestBody, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
 import { TAG_SYSTEM_PROMPT } from '../prompts/tagPrompts';
 
+// Define more specific types for Vertex API error responses
+interface VertexErrorResponse {
+    error?: {
+        message: string;
+    };
+    response?: {
+        data?: {
+            error?: {
+                message: string;
+            };
+        };
+    };
+}
+
 export class VertexAdapter extends BaseAdapter {
     private readonly defaultConfig = {
         temperature: 0.7,
@@ -67,9 +81,30 @@ export class VertexAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    public parseResponse(response: Record<string, unknown>): BaseResponse {
         try {
-            const content = response.predictions?.[0]?.candidates?.[0]?.content;
+            // Use a safer type assertion with proper type checking
+            const predictions = response.predictions as unknown;
+            if (!predictions || !Array.isArray(predictions)) {
+                throw new Error('Invalid response format: missing predictions array');
+            }
+            
+            const firstPrediction = predictions[0] as Record<string, unknown>;
+            if (!firstPrediction) {
+                throw new Error('Invalid response format: empty predictions array');
+            }
+            
+            const candidates = firstPrediction.candidates as unknown;
+            if (!candidates || !Array.isArray(candidates)) {
+                throw new Error('Invalid response format: missing candidates array');
+            }
+            
+            const firstCandidate = candidates[0] as Record<string, unknown>;
+            if (!firstCandidate) {
+                throw new Error('Invalid response format: empty candidates array');
+            }
+            
+            const content = firstCandidate.content as string;
             if (!content) {
                 throw new Error('Invalid response format: missing content');
             }
@@ -101,12 +136,17 @@ export class VertexAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
+    public extractError(error: Record<string, unknown> | Error): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+
+        const errorObj = error as VertexErrorResponse;
         const message = 
-            error.error?.message ||
-            error.response?.data?.error?.message ||
-            error.message ||
+            errorObj.error?.message ||
+            errorObj.response?.data?.error?.message ||
             'Unknown error occurred';
+            
         return message;
     }
 

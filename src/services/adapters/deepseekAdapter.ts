@@ -2,6 +2,18 @@ import { BaseAdapter } from "./baseAdapter";
 import { BaseResponse, AdapterConfig } from "./types";
 import * as endpoints from './cloudEndpoints.json';
 
+// Define specific interface for Deepseek responses
+interface DeepseekResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+  error?: {
+    message: string;
+  };
+}
+
 export class DeepseekAdapter extends BaseAdapter {
   constructor(config: AdapterConfig) {
     super({
@@ -44,14 +56,15 @@ export class DeepseekAdapter extends BaseAdapter {
     return null;
   }
 
-  parseResponse(response: any): BaseResponse {
+  parseResponse(response: Record<string, unknown>): BaseResponse {
     try {
-      let result = response;
+      const deepseekResponse = response as DeepseekResponse;
+      let result: unknown = response;
       let content = '';
       
       // 先获取原始的响应内容
-      if (response.choices?.[0]?.message?.content) {
-        content = response.choices[0].message.content;
+      if (deepseekResponse.choices?.[0]?.message?.content) {
+        content = deepseekResponse.choices[0].message.content;
       }
       
       // 解析结构化数据
@@ -59,7 +72,7 @@ export class DeepseekAdapter extends BaseAdapter {
         if (!result || typeof result !== 'object') {
           throw new Error('Invalid response structure');
         }
-        result = result[key];
+        result = (result as Record<string | number, unknown>)[key];
       }
       
       // 提取标签数据

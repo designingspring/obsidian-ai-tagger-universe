@@ -2,6 +2,41 @@ import { BaseAdapter } from './baseAdapter';
 import { TAG_SYSTEM_PROMPT } from '../prompts/tagPrompts';
 import { BaseResponse, RequestBody, AdapterConfig } from './types';
 
+// Define additional types for OpenAI-compatible requests and responses
+interface OpenAICompatibleRequestExtension {
+    temperature?: number;
+    max_tokens?: number;
+    top_p?: number;
+    frequency_penalty?: number;
+    presence_penalty?: number;
+    stop?: string[];
+    [key: string]: unknown;
+}
+
+interface OpenAICompatibleResponse {
+    choices?: Array<{
+        message?: {
+            content?: string;
+        };
+        text?: string;
+    }>;
+    error?: {
+        message: string;
+    };
+}
+
+interface OpenAICompatibleErrorResponse {
+    response?: {
+        data?: {
+            error?: {
+                message: string;
+            };
+            message?: string;
+        };
+    };
+    message?: string;
+}
+
 export class OpenAICompatibleAdapter extends BaseAdapter {
     constructor(config: AdapterConfig) {
         super(config);
@@ -22,8 +57,8 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
         };
     }
 
-    public formatRequest(prompt: string): RequestBody & Record<string, any> {
-        const body: RequestBody & Record<string, any> = {
+    public formatRequest(prompt: string): RequestBody & OpenAICompatibleRequestExtension {
+        const body: RequestBody & OpenAICompatibleRequestExtension = {
             model: this.config.modelName,
             messages: [{
                 role: 'system',
@@ -44,18 +79,23 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
         return body;
     }
 
-    public parseResponse(response: any): BaseResponse {
+    public parseResponse(response: Record<string, unknown>): BaseResponse {
         try {
-            let content: string;
+            const openaiResponse = response as OpenAICompatibleResponse;
+            let content: string | undefined;
             
             // Handle different response formats
-            if (response.choices?.[0]?.message?.content) {
-                content = response.choices[0].message.content;
-            } else if (response.choices?.[0]?.text) {
+            if (openaiResponse.choices?.[0]?.message?.content) {
+                content = openaiResponse.choices[0].message.content;
+            } else if (openaiResponse.choices?.[0]?.text) {
                 // Some OpenAI-compatible APIs might use 'text' instead of 'message.content'
-                content = response.choices[0].text;
+                content = openaiResponse.choices[0].text;
             } else {
                 throw new Error('Invalid response format: missing content');
+            }
+
+            if (!content) {
+                throw new Error('Response content is empty');
             }
 
             const jsonContent = this.extractJsonFromContent(content);
@@ -88,15 +128,20 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
+    public extractError(error: Record<string, unknown> | Error): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+        
+        const errorObj = error as OpenAICompatibleErrorResponse;
         // Handle different error response formats
-        if (error.response?.data?.error?.message) {
-            return error.response.data.error.message;
+        if (errorObj.response?.data?.error?.message) {
+            return errorObj.response.data.error.message;
         }
-        if (error.response?.data?.message) {
-            return error.response.data.message;
+        if (errorObj.response?.data?.message) {
+            return errorObj.response.data.message;
         }
-        return error.message || 'Unknown error occurred';
+        return errorObj.message || 'Unknown error occurred';
     }
 
     public getHeaders(): Record<string, string> {

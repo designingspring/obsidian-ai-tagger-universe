@@ -2,6 +2,33 @@ import { BaseAdapter } from './baseAdapter';
 import { BaseResponse, RequestBody, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
 
+// Define specific interface for Groq responses
+interface GroqResponse {
+    choices?: Array<{
+        message?: {
+            content?: string;
+        };
+    }>;
+    error?: {
+        message: string;
+    };
+}
+
+// Define specific interface for Groq error responses
+interface GroqErrorResponse {
+    error?: {
+        message: string;
+    };
+    response?: {
+        data?: {
+            error?: {
+                message: string;
+            };
+        };
+    };
+    message?: string;
+}
+
 export class GroqAdapter extends BaseAdapter {
     private readonly defaultConfig = {
         temperature: 0.7,
@@ -40,9 +67,11 @@ export class GroqAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    public parseResponse(response: Record<string, unknown>): BaseResponse {
         try {
-            const content = response.choices?.[0]?.message?.content;
+            const groqResponse = response as GroqResponse;
+            const content = groqResponse.choices?.[0]?.message?.content;
+            
             if (!content) {
                 throw new Error('Invalid response format: missing content');
             }
@@ -74,11 +103,16 @@ export class GroqAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
+    public extractError(error: Record<string, unknown> | Error): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+
+        const errorObj = error as GroqErrorResponse;
         const message = 
-            error.error?.message ||
-            error.response?.data?.error?.message ||
-            error.message ||
+            errorObj.error?.message ||
+            errorObj.response?.data?.error?.message ||
+            errorObj.message ||
             'Unknown error occurred';
         return message;
     }
