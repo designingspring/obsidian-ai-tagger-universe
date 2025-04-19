@@ -250,11 +250,13 @@ export abstract class BaseLLMService {
                 // If we have a valid JSON response with tags
                 if (Array.isArray(jsonResponse.tags)) {
                     const processedTags = this.processTagsFromResponse(jsonResponse);
+                    const suggestedTags = processedTags.tags.slice(0, maxTags);
                     
                     // Apply tags according to mode - only GenerateNew mode now
                     return {
                         matchedExistingTags: [],
-                        suggestedTags: processedTags.tags.slice(0, maxTags)
+                        suggestedTags: suggestedTags,
+                        tags: suggestedTags // Add combined tags
                     };
                 }
                 
@@ -269,9 +271,11 @@ export abstract class BaseLLMService {
                 */
                 
                 if (Array.isArray(jsonResponse.newTags) && mode === TaggingMode.GenerateNew) {
+                    const suggestedTags = jsonResponse.newTags.slice(0, maxTags);
                     return {
                         matchedExistingTags: [],
-                        suggestedTags: jsonResponse.newTags.slice(0, maxTags)
+                        suggestedTags: suggestedTags,
+                        tags: suggestedTags // Add combined tags
                     };
                 }
             } catch (e) {
@@ -287,11 +291,13 @@ export abstract class BaseLLMService {
             
             // Process the text response
             const processedResponse = this.processTagsFromResponse(cleanedResponse);
+            const suggestedTags = processedResponse.tags.slice(0, maxTags);
             
             // Return tags according to mode - only GenerateNew mode now
             return {
                 matchedExistingTags: [],
-                suggestedTags: processedResponse.tags.slice(0, maxTags)
+                suggestedTags: suggestedTags,
+                tags: suggestedTags // Add combined tags
             };
         } catch (error) {
             //console.error('Error parsing LLM response:', error);
