@@ -1,4 +1,4 @@
-import { App, Modal, ButtonComponent, Setting, Notice } from 'obsidian';
+import { App, Modal, ButtonComponent, Notice } from 'obsidian';
 import AITaggerPlugin from '../../main';
 import { VaultItem } from '../../utils/vaultPathFetcher';
 
@@ -6,9 +6,9 @@ export class BatchTaggingModal extends Modal {
     private folders: string[] = [];
     private filterInput!: HTMLInputElement;
     private pathDropdownContainer!: HTMLElement;
-    private searchTerm: string = '';
+    private searchTerm = '';
     private cachedFolders: VaultItem[] = [];
-    private hasLoadedFolders: boolean = false;
+    private hasLoadedFolders = false;
 
     private documentClickListener = (event: MouseEvent) => {
         const target = event.target as Node;

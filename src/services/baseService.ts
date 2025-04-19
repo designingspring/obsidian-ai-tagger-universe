@@ -2,7 +2,7 @@ import { LLMServiceConfig, LLMResponse, ConnectionTestResult, ConnectionTestErro
 import { buildTagPrompt, TAG_SYSTEM_PROMPT } from './prompts/tagPrompts';
 import { TaggingMode } from './prompts/types';
 import { LanguageCode } from './types';
-import { App, Notice } from 'obsidian';
+import { App } from 'obsidian';
 
 /**
  * Base class for LLM service implementations
@@ -32,7 +32,7 @@ export abstract class BaseLLMService {
      * @param language - Optional language code
      * @returns Formatted request body
      */
-    public formatRequest(prompt: string, language?: string): any {
+    public formatRequest(prompt: string, _language?: string): any {
         // Default OpenAI-compatible format
         return {
             model: this.modelName,
@@ -283,9 +283,9 @@ export abstract class BaseLLMService {
             }
             
             // Clean up the response
-            let cleanedResponse = response
+            const cleanedResponse = response
                 .replace(/^```.*$/gm, '') // Remove code blocks
-                .replace(/^\s*[\-\*]\s+/gm, '') // Remove list markers
+                .replace(/^\s*[-*]\s+/gm, '') // Remove list markers
                 .replace(/^\s*\d+\.\s+/gm, '') // Remove numbered list markers
                 .trim();
             
@@ -321,7 +321,7 @@ export abstract class BaseLLMService {
             }
             
             // Convert any input to a processable string
-            let textContent: string = '';
+            let textContent = '';
             
             if (typeof content === 'string') {
                 // Use string content directly
@@ -357,20 +357,21 @@ export abstract class BaseLLMService {
                 
                 // If no standard fields, try to extract any possible string
                 if (!textContent) {
-                    for (const [key, value] of Object.entries(content)) {
+                    Object.entries(content).some(([, value]) => {
                         if (typeof value === 'string' && value.trim()) {
                             textContent = value.trim();
-                            //console.log(`Using string value from field "${key}":`, textContent);
-                            break;
+                            //console.log(`Using string value from field:`, textContent);
+                            return true;
                         } else if (Array.isArray(value) && value.length > 0) {
                             // Try simple arrays
                             textContent = value
                                 .filter((item: any) => item !== null && item !== undefined)
                                 .join(', ');
-                            //console.log(`Using array value from field "${key}":`, textContent);
-                            break;
+                            //console.log(`Using array value from field:`, textContent);
+                            return true;
                         }
-                    }
+                        return false;
+                    });
                 }
             }
             
@@ -489,7 +490,7 @@ export abstract class BaseLLMService {
         content: string, 
         candidateTags: string[], 
         mode: TaggingMode = TaggingMode.GenerateNew,
-        maxTags: number = 10,
+        maxTags = 10,
         language?: LanguageCode
     ): Promise<LLMResponse> {
         try {

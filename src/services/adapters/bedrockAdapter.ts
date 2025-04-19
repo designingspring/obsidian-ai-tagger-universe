@@ -63,7 +63,7 @@ export class BedrockAdapter extends BaseAdapter {
 
     public parseResponse(response: any): BaseResponse {
         try {
-            let content: string = '';
+            let content = '';
             const modelName = this.config.modelName || '';
             
             if (modelName.includes('claude')) {
