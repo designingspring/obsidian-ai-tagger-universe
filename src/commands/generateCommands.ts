@@ -125,7 +125,7 @@ export function registerGenerateCommands(plugin: AITaggerPlugin) {
 
     // Register file menu items for batch tagging
     plugin.registerEvent(
-        // @ts-ignore - File menu event is not properly typed in Obsidian API
+        // @ts-expect-error - File menu event is not properly typed in Obsidian API
         plugin.app.workspace.on('file-menu', (menu: Menu, file: TFile, source: string, files?: TFile[]) => {
             if (files && files.length > 0) {
                 // Multiple files selected

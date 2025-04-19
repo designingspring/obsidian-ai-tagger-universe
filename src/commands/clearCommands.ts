@@ -1,4 +1,4 @@
-import { Editor, MarkdownFileInfo, MarkdownView, Notice, TFile } from 'obsidian';
+import { Editor, MarkdownFileInfo, MarkdownView, Notice } from 'obsidian';
 import AITaggerPlugin from '../main';
 
 export function registerClearCommands(plugin: AITaggerPlugin) {
