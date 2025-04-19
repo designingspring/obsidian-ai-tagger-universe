@@ -12,10 +12,9 @@ export const TAG_SYSTEM_PROMPT =
     '2. **Specific (but not too narrow)**: Avoid overly broad tags like "misc" or "stuff," and do not be so detailed that a tag only applies in one rare case. Choose words that are likely to be reused.\n' +
     '3. **Consistent**: Use a uniform style (e.g., lowercase letters, hyphenation if necessary) so that tags follow an agreed-upon vocabulary.\n' +
     '4. **Searchable**: Select tags that contain keywords a person might naturally use when searching for this document.\n' +
-    '5. **Multi-dimensional (when needed)**: Include tags that can denote type, topic, status, audience, or date when relevant (e.g., "report," "finance," "2024").\n' +
+    '5. **Multi-dimensional (when needed)**: Include tags that can denote type, topic, status, audience when relevant (e.g., "report," "finance,").\n' +
     '6. **Avoid Redundancy**: Do not include tags that duplicate metadata already provided elsewhere unless they enhance searchability.' +
-    '7. **Return only tags**: Return your response ONLY as a comma-separated list of tags. Do not include the # symbol. For example: programming, javascript, web-development, tutorial' +
-    '8. **Avoid dates**: Do not return any tags that include dates. For example: 2024, June, 27th etc.';
+    '7. **Return only tags**: Return your response ONLY as a comma-separated list of tags. Do not include the # symbol. For example: programming, javascript, web-development, tutorial';
 
 /**
  * Language-specific instruction templates for different tagging modes
