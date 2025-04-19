@@ -122,16 +122,17 @@ export abstract class BaseAdapter extends BaseLLMService {
         this.config = config;
     }
 
-    async analyzeTags(content: string, existingTags: string[]): Promise<any> {
+    async analyzeTags(content: string, _existingTags: string[]): Promise<any> {
         // Using GenerateNew mode instead of Hybrid
         const prompt = this.buildPrompt(content, [], TaggingMode.GenerateNew, 10, this.config.language);
-        const response = await this.makeRequest(prompt);
-        return this.parseResponse(response);
+        // Send the request
+        const result = await this.makeRequest(prompt);
+        return this.parseResponse(result);
     }
 
     async testConnection(): Promise<{ result: any; error?: any }> {
         try {
-            const response = await this.makeRequest('test');
+            await this.makeRequest('test');
             return { result: { success: true } };
         } catch (error) {
             return { result: { success: false }, error };
@@ -163,6 +164,21 @@ export abstract class BaseAdapter extends BaseLLMService {
         return {
             'Content-Type': 'application/json'
         };
+    }
+
+    getParams(): Record<string, string> {
+        return {};
+    }
+
+    getClient() {
+        const clientConfig = {
+            baseURL: this.getEndpoint(),
+            headers: this.getHeaders(),
+            params: this.getParams()
+        };
+    
+        // Just return config, let the consumer create the client as needed
+        return clientConfig;
     }
 
     protected extractJsonFromContent(content: string): any {

@@ -1,5 +1,3 @@
-import { LanguageCode } from '../services/types';
-
 /**
  * Utility class for language-related operations
  */

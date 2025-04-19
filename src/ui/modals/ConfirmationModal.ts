@@ -7,13 +7,13 @@ export class ConfirmationModal extends Modal {
         this.contentEl.addClass('ai-tagger-modal-content');
         
         // Create title with warning icon
-        const titleEl = this.contentEl.createEl('h3', {
+        this.contentEl.createEl('h3', {
             cls: 'ai-tagger-modal-title',
             text: `${title}`
         });
         
         // Create message
-        const messageEl = this.contentEl.createEl('p', {
+        this.contentEl.createEl('p', {
             cls: 'ai-tagger-modal-message',
             text: message
         });

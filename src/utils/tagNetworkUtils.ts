@@ -1,4 +1,4 @@
-import { App, TFile } from 'obsidian';
+import { App } from 'obsidian';
 import { TagUtils } from './tagUtils';
 
 export interface TagData {
@@ -52,8 +52,10 @@ export class TagNetworkManager {
                         });
                     }
                     
-                    const tagInfo = this.tagData.get(tag)!;
-                    tagInfo.frequency += 1;
+                    const tagInfo = this.tagData.get(tag);
+                    if (tagInfo) {
+                        tagInfo.frequency += 1;
+                    }
                 }
                 
                 for (let i = 0; i < tags.length; i++) {
@@ -61,17 +63,29 @@ export class TagNetworkManager {
                         const tag1 = tags[i];
                         const tag2 = tags[j];
                         
-                        const tagInfo1 = this.tagData.get(tag1)!;
-                        if (!tagInfo1.connections.has(tag2)) {
-                            tagInfo1.connections.set(tag2, 0);
+                        const tagInfo1 = this.tagData.get(tag1);
+                        if (tagInfo1) {
+                            if (!tagInfo1.connections.has(tag2)) {
+                                tagInfo1.connections.set(tag2, 0);
+                            }
+                            
+                            const currentCount = tagInfo1.connections.get(tag2);
+                            if (currentCount !== undefined) {
+                                tagInfo1.connections.set(tag2, currentCount + 1);
+                            }
                         }
-                        tagInfo1.connections.set(tag2, tagInfo1.connections.get(tag2)! + 1);
                         
-                        const tagInfo2 = this.tagData.get(tag2)!;
-                        if (!tagInfo2.connections.has(tag1)) {
-                            tagInfo2.connections.set(tag1, 0);
+                        const tagInfo2 = this.tagData.get(tag2);
+                        if (tagInfo2) {
+                            if (!tagInfo2.connections.has(tag1)) {
+                                tagInfo2.connections.set(tag1, 0);
+                            }
+                            
+                            const currentCount = tagInfo2.connections.get(tag1);
+                            if (currentCount !== undefined) {
+                                tagInfo2.connections.set(tag1, currentCount + 1);
+                            }
                         }
-                        tagInfo2.connections.set(tag1, tagInfo2.connections.get(tag1)! + 1);
                     }
                 }
             }

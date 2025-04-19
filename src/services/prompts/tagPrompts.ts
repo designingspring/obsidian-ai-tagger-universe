@@ -1,7 +1,7 @@
 import { LanguageCode } from '../types';
 import { LanguageUtils } from '../../utils/languageUtils';
 import { TaggingMode } from './types';
-import { TAG_PREDEFINED_RANGE, TAG_GENERATE_RANGE } from '../../utils/constants';
+// import { TAG_PREDEFINED_RANGE, TAG_GENERATE_RANGE } from '../../utils/constants';
 
 /**
  * System prompt that defines the AI's role
@@ -79,7 +79,7 @@ note: don't add "matchedExistingTags" or "suggestedTags" to the tags themselves 
 Do not include the # symbol in tags.`,
     */
 
-    generateNew: (maxTags: number, content: string, langInstructions: string) => 
+    generateNew: (maxTags: number, content: string, _langInstructions: string) => 
         // `${langInstructions}Analyze the following content and generate up to ${maxTags} relevant tags.
 
         `Below is the document content.
@@ -104,7 +104,7 @@ export function buildTagPrompt(
     content: string, 
     candidateTags: string[], 
     mode: TaggingMode,
-    maxTags: number = 5,
+    maxTags = 5,
     language?: LanguageCode | 'default'
 ): string {
     let langInstructions = '';
