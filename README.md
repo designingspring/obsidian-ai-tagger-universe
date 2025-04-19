@@ -1,5 +1,7 @@
 # AI Tagger Universe: Easy Tag Generation & Management for Obsidian
 
+> ⚠️ **WARNING:** This is NOT an officially published Obsidian Community Plugin. If you're looking for the official plugin, please visit the original repository at [github.com/niehu2018/obsidian-ai-tagger-universe](https://github.com/niehu2018/obsidian-ai-tagger-universe).
+
 ![AI Tagger Universe](https://img.shields.io/badge/Obsidian-AI%20Tagger%20Universe-blue)
 ![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?logo=obsidian&color=%23483699&label=downloads&query=%24%5B%22ai-tagger-universe%22%5D.downloads&url=https%3A%2F%2Fraw.githubusercontent.com%2Fobsidianmd%2Fobsidian-releases%2Fmaster%2Fcommunity-plugin-stats.json)
 ![Obsidian Compatibility](https://img.shields.io/badge/Obsidian-v1.4.0+-blue)
@@ -8,17 +10,23 @@ Automatically generate intelligent tags for your Obsidian notes using AI. This p
 
 ## 🔌 Installation
 
-This plugin can be installed directly from the Obsidian Community Plugins browser:
-1. Open Obsidian Settings
-2. Navigate to Community Plugins
-3. Disable Safe Mode (if enabled)
-4. Search for "AI Tagger Universe"
-5. Click Install, then Enable
+This plugin needs to be built before installation:
 
-Alternatively, you can manually install the plugin:
-1. Download the latest release from this repository
-2. Extract the files to your Obsidian vault's `.obsidian/plugins/ai-tagger-universe` folder
-3. Reload Obsidian and enable the plugin in the Community Plugins settings
+1. Clone this repository to your local machine
+2. Make sure you have Node.js installed
+3. Open a terminal in the repository folder
+4. Run `npm install` to install dependencies
+5. Run `npm run build` to build the plugin
+6. Create a folder called `ai-tagger-universe` in your Obsidian vault's `.obsidian/plugins/` directory
+7. Copy the contents of the `dist/` folder into the `ai-tagger-universe` folder you created
+8. Restart Obsidian or reload the app
+9. Go to Settings > Community plugins, and enable "AI Tagger Universe"
+
+Alternatively, you can use the BRAT (Beta Reviewers Auto-update Tool) plugin:
+1. Install BRAT from Obsidian Community Plugins
+2. Open BRAT settings and add this repository URL
+3. Click "Add Plugin" and install when prompted
+4. Enable the plugin in Community plugins settings
 
 ## ✨ Key Features
 
@@ -50,7 +58,7 @@ Alternatively, you can manually install the plugin:
 
 ## 🚀 Quick Start
 
-1. **Install the plugin** from Obsidian Community Plugins
+1. **Install the plugin** manually as described above
 2. **Configure your AI provider**:
    - Choose between Local LLM or Cloud Service
    - Enter your endpoint URL and API key (if needed)
@@ -79,6 +87,6 @@ Generate tags in multiple languages including English, Chinese, Japanese, German
 
 ## 💖 Support Development
 
-If you find this plugin useful, please consider [buying me a coffee](https://buymeacoffee.com/niehu2015o) to support ongoing development.
+If you find this plugin useful, please consider supporting the original developer at the [official repository](https://github.com/niehu2018/obsidian-ai-tagger-universe).
 
 [MIT License](LICENSE)
