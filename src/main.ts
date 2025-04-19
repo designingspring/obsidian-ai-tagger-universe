@@ -1,4 +1,4 @@
-import { App, MarkdownView, Modal, Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { App, MarkdownView, Notice, Plugin, PluginManifest, TFile } from 'obsidian';
 import { 
     ConnectionTestError,
     ConnectionTestResult,
@@ -11,7 +11,7 @@ import { ConfirmationModal } from './ui/modals/ConfirmationModal';
 import { TagUtils, TagOperationResult } from './utils/tagUtils';
 import { TaggingMode } from './services/prompts/types';
 import { registerCommands } from './commands/index';
-import { AITaggerSettings, DEFAULT_SETTINGS } from './core/settings';
+import { DEFAULT_SETTINGS } from './core/settings';
 import { AITaggerSettingTab } from './ui/settings/AITaggerSettingTab';
 import { EventHandlers } from './utils/eventHandlers';
 import { TagNetworkManager } from './utils/tagNetworkUtils';
@@ -26,7 +26,7 @@ export default class AITaggerPlugin extends Plugin {
     private tagNetworkManager: TagNetworkManager;
     private tagOperations: TagOperations;
 
-    constructor(app: App, manifest: any) {
+    constructor(app: App, manifest: PluginManifest) {
         super(app, manifest);
         this.llmService = new LocalLLMService({
             endpoint: DEFAULT_SETTINGS.localEndpoint,
@@ -98,7 +98,7 @@ export default class AITaggerPlugin extends Plugin {
         this.addRibbonIcon(
             'tags', 
             'Analyze and tag current note', 
-            (evt: MouseEvent) => {
+            (_evt: MouseEvent) => {
                 this.analyzeAndTagCurrentNote();
             }
         );
@@ -106,7 +106,7 @@ export default class AITaggerPlugin extends Plugin {
         this.addRibbonIcon(
             'graph', 
             'View tag relationships network', 
-            (evt: MouseEvent) => {
+            (_evt: MouseEvent) => {
                 this.showTagNetwork();
             }
         );
@@ -390,7 +390,7 @@ export default class AITaggerPlugin extends Plugin {
         try {
             let analysis: LLMResponse;
             
-            // Determine parameter type
+            // Get or analyze content
             if (typeof contentOrAnalysis === 'string') {
                 const content = contentOrAnalysis.trim();
                 if (!content) {
@@ -400,59 +400,61 @@ export default class AITaggerPlugin extends Plugin {
                     };
                 }
                 
-                // Analyze based on the configured tagging mode
+                let predefinedTags: string[] = [];
+                let hybridPredefinedTags: string[] = [];
+                
                 switch (this.settings.taggingMode) {
-                    case TaggingMode.GenerateNew:
-                        analysis = await this.llmService.analyzeTags(
-                            content,
-                            [], // Empty array, generate tags purely based on content
-                            TaggingMode.GenerateNew,
-                            this.settings.tagRangeGenerateMax,
-                            this.settings.language
-                        );
-                        break;
-                    
-                    case TaggingMode.PredefinedTags:
-                        // Get candidate tags (from file or vault)
-                        const predefinedTags = this.settings.tagSourceType === 'file'
-                            ? await TagUtils.getTagsFromFile(this.app, this.settings.predefinedTagsPath) || []
-                            : TagUtils.getAllTags(this.app);
+                case TaggingMode.GenerateNew:
+                    analysis = await this.llmService.analyzeTags(
+                        content,
+                        [], // Empty array for existing tags in generate-only mode
+                        TaggingMode.GenerateNew,
+                        this.settings.tagRangeGenerateMax,
+                        this.settings.language
+                    );
+                    break;
+                
+                case TaggingMode.PredefinedTags:
+                    // Get candidate tags (from file or vault)
+                    predefinedTags = this.settings.tagSourceType === 'file'
+                        ? await TagUtils.getTagsFromFile(this.app, this.settings.predefinedTagsPath) || []
+                        : TagUtils.getAllTags(this.app);
                         
-                        if (!predefinedTags.length) {
-                            return {
-                                success: false,
-                                message: 'No predefined tags available'
-                            };
-                        }
-                        
-                        analysis = await this.llmService.analyzeTags(
-                            content,
-                            predefinedTags,
-                            TaggingMode.PredefinedTags,
-                            this.settings.tagRangePredefinedMax
-                        );
-                        break;
-
-                    case TaggingMode.Hybrid:
-                        // Get candidate tags (from file or vault)
-                        const hybridPredefinedTags = this.settings.tagSourceType === 'file'
-                            ? await TagUtils.getTagsFromFile(this.app, this.settings.predefinedTagsPath) || []
-                            : TagUtils.getAllTags(this.app);
-                        
-                        analysis = await this.llmService.analyzeTags(
-                            content,
-                            hybridPredefinedTags,
-                            TaggingMode.Hybrid, 
-                            Math.max(this.settings.tagRangeGenerateMax, this.settings.tagRangePredefinedMax),
-                            this.settings.language
-                        );
-                        break;
-                    
-                    default:
+                    if (!predefinedTags.length) {
                         return {
                             success: false,
-                            message: `Unsupported tagging mode: ${this.settings.taggingMode}`
+                            message: 'No predefined tags available'
                         };
+                    }
+                    
+                    analysis = await this.llmService.analyzeTags(
+                        content,
+                        predefinedTags,
+                        TaggingMode.PredefinedTags,
+                        this.settings.tagRangePredefinedMax
+                    );
+                    break;
+
+                case TaggingMode.Hybrid:
+                    // Get candidate tags (from file or vault)
+                    hybridPredefinedTags = this.settings.tagSourceType === 'file'
+                        ? await TagUtils.getTagsFromFile(this.app, this.settings.predefinedTagsPath) || []
+                        : TagUtils.getAllTags(this.app);
+                        
+                    analysis = await this.llmService.analyzeTags(
+                        content,
+                        hybridPredefinedTags,
+                        TaggingMode.Hybrid, 
+                        Math.max(this.settings.tagRangeGenerateMax, this.settings.tagRangePredefinedMax),
+                        this.settings.language
+                    );
+                    break;
+                
+                default:
+                    return {
+                        success: false,
+                        message: `Unsupported tagging mode: ${this.settings.taggingMode}`
+                    };
                 }
             } else {
                 // Use the provided analysis result directly
