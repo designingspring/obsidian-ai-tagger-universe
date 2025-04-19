@@ -1,26 +1,43 @@
-import { App, ItemView, ViewStateResult, WorkspaceLeaf } from 'obsidian';
-import { NetworkData, NetworkNode, NetworkEdge } from '../../utils/tagNetworkUtils';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
+import { ItemView, WorkspaceLeaf } from 'obsidian';
+import { TagNetworkManager, NetworkData } from '../../utils/tagNetworkUtils';
+import AITaggerPlugin from '../../main';
 
-export const TAG_NETWORK_VIEW_TYPE = 'tag-network-view';
+export const TAG_NETWORK_VIEW = "tag-network-view";
 
+// Define a very loose type for d3 to avoid type errors
 declare global {
     interface Window {
-        d3: any;
+        // @ts-ignore
+        d3: any; 
     }
 }
 
 export class TagNetworkView extends ItemView {
-    private networkData: NetworkData;
+    private networkData: NetworkData | null = null;
+    private networkContainer: HTMLElement;
+    private loadingElement: HTMLElement;
+    private noDataElement: HTMLElement;
+    private networkManager: TagNetworkManager;
+    private networkInitialized = false;
+    private sigma: any; // Will be initialized lazily when needed
     private cleanup: (() => void)[] = [];
     private d3LoadPromise: Promise<void> | null = null;
     
-    constructor(leaf: WorkspaceLeaf, private data: NetworkData) {
+    constructor(
+        leaf: WorkspaceLeaf,
+        private plugin: AITaggerPlugin
+    ) {
         super(leaf);
-        this.networkData = data;
+        this.networkManager = new TagNetworkManager(this.plugin.app);
+        this.networkContainer = createDiv('network-container');
+        this.loadingElement = createDiv('network-loading');
+        this.noDataElement = createDiv('network-no-data');
     }
 
     getViewType(): string {
-        return TAG_NETWORK_VIEW_TYPE;
+        return TAG_NETWORK_VIEW;
     }
 
     getDisplayText(): string {
@@ -75,7 +92,7 @@ export class TagNetworkView extends ItemView {
         const statusEl = contentEl.createDiv({ cls: 'tag-network-status' });
         statusEl.setText('Loading visualization...');
         
-        if (this.networkData.nodes.length === 0) {
+        if (this.networkData === null || this.networkData.nodes.length === 0) {
             statusEl.setText('No tags found in your vault. Add some tags first!');
             return;
         }
@@ -191,11 +208,18 @@ export class TagNetworkView extends ItemView {
         
         const zoom = d3.zoom()
             .scaleExtent([0.1, 8])
-            .on('zoom', (event: { transform: any }) => {
-                g.attr('transform', event.transform);
+            .on('zoom', (event: D3Event) => {
+                if (event.transform) {
+                    g.attr('transform', event.transform);
+                }
             });
         
         svg.call(zoom);
+        
+        if (!this.networkData || this.networkData.nodes.length === 0) {
+            statusEl.setText('No tags found in your vault. Add some tags first!');
+            return;
+        }
         
         const nodes = this.networkData.nodes.map(node => ({
             ...node,
@@ -212,25 +236,25 @@ export class TagNetworkView extends ItemView {
         }));
         
         const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links).id((d: NetworkNode) => d.id).distance(100))
+            .force('link', d3.forceLink(links).id((d: D3Node) => d.id).distance(100))
             .force('charge', d3.forceManyBody().strength(-300))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius((d: NetworkNode) => d.size + 5));
+            .force('collision', d3.forceCollide().radius((d: D3Node) => d.size + 5));
         
         const link = g.append('g')
                 .attr('class', 'tag-network-link')
             .selectAll('line')
             .data(links)
             .join('line')
-            .attr('stroke-width', (d: NetworkEdge) => Math.sqrt(d.weight));
+            .attr('stroke-width', (d: D3Link) => Math.sqrt(d.weight));
         
         const node = g.append('g')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
             .attr('class', 'tag-network-node')
-            .attr('r', (d: NetworkNode) => d.size)
-            .attr('fill', (d: NetworkNode) => this.getNodeColor(d.frequency))
+            .attr('r', (d: D3Node) => d.size)
+            .attr('fill', (d: D3Node) => this.getNodeColor(d.frequency))
             .call(this.drag(simulation));
         
         const labels = g.append('g')
@@ -238,12 +262,12 @@ export class TagNetworkView extends ItemView {
             .data(nodes)
             .join('text')
             .attr('class', 'tag-network-label')
-            .text((d: NetworkNode) => d.label)
-            .attr('dx', (d: NetworkNode) => d.size + 5)
+            .text((d: D3Node) => d.label)
+            .attr('dx', (d: D3Node) => d.size + 5)
             .attr('dy', 4);
         
-        const handleMouseOver = (event: MouseEvent, d: NetworkNode) => {
-            node.attr('opacity', (n: NetworkNode) => {
+        const handleMouseOver = (event: MouseEvent, d: D3Node) => {
+            node.attr('opacity', (n: D3Node) => {
                 const isConnected = links.some((link: any) => 
                     (link.source.id === d.id && link.target.id === n.id) || 
                     (link.target.id === d.id && link.source.id === n.id)
@@ -286,7 +310,7 @@ export class TagNetworkView extends ItemView {
             const searchTerm = searchInput.value.toLowerCase();
             
             if (searchTerm.length > 0) {
-                node.attr('opacity', (d: NetworkNode) => 
+                node.attr('opacity', (d: D3Node) => 
                     d.label.toLowerCase().includes(searchTerm) ? 1 : 0.2
                 );
                 
@@ -324,24 +348,30 @@ export class TagNetworkView extends ItemView {
         statusEl.style.display = 'none';
     }
     
-    private drag(simulation: any) {
+    private drag(simulation: D3Simulation) {
         const d3 = window.d3;
         
-        function dragstarted(event: any) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            event.subject.fx = event.subject.x;
-            event.subject.fy = event.subject.y;
+        function dragstarted(event: D3Event) {
+            if (event.active === undefined || !event.active) simulation.alphaTarget(0.3).restart();
+            if (event.subject) {
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
         }
         
-        function dragged(event: any) {
-            event.subject.fx = event.x;
-            event.subject.fy = event.y;
+        function dragged(event: D3Event) {
+            if (event.subject && event.x !== undefined && event.y !== undefined) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
         }
         
-        function dragended(event: any) {
-            if (!event.active) simulation.alphaTarget(0);
-            event.subject.fx = null;
-            event.subject.fy = null;
+        function dragended(event: D3Event) {
+            if (event.active === undefined || !event.active) simulation.alphaTarget(0);
+            if (event.subject) {
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
         }
         
         return d3.drag()
@@ -350,8 +380,12 @@ export class TagNetworkView extends ItemView {
             .on('end', dragended);
     }
     
-    private getNodeColor(frequency: number, opacity: number = 1): string {
+    private getNodeColor(frequency: number, opacity = 1): string {
         const minFreq = 1;
+        if (!this.networkData) {
+            return `rgba(100, 149, 237, ${opacity})`;
+        }
+        
         const maxFreq = Math.max(...this.networkData.nodes.map(n => n.frequency));
         const normalizedFreq = (frequency - minFreq) / (maxFreq - minFreq);
         

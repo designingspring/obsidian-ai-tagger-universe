@@ -1,11 +1,11 @@
 import { Setting, Notice } from 'obsidian';
-import type AITaggerPlugin from '../../main';
 import { TaggingMode } from '../../services/prompts/types';
 import { BaseSettingSection } from './BaseSettingSection';
 import { LanguageUtils } from '../../utils/languageUtils';
 import { ExcludedFilesModal } from '../modals/ExcludedFilesModal';
 import { BatchTaggingModal } from '../modals/BatchTaggingModal';
 import { TagUtils } from '../../utils/tagUtils';
+import { LanguageCode } from '../../services/types';
 
 export class TaggingSettingsSection extends BaseSettingSection {
     private tagSourceSetting: Setting | null = null;
@@ -307,7 +307,7 @@ export class TaggingSettingsSection extends BaseSettingSection {
                     .addOptions(options)
                     .setValue(this.plugin.settings.language)
                     .onChange(async (value) => {
-                        this.plugin.settings.language = value as any;
+                        this.plugin.settings.language = value as LanguageCode;
                         await this.plugin.saveSettings();
                     });
             });
@@ -508,7 +508,7 @@ export class TaggingSettingsSection extends BaseSettingSection {
                     [], 
                     TaggingMode.GenerateNew,
                     this.plugin.settings.tagRangeGenerateMax,
-                    this.plugin.settings.language as any
+                    this.plugin.settings.language as LanguageCode
                 );
                 
                 // If we got tags back, update the file
@@ -538,7 +538,9 @@ export class TaggingSettingsSection extends BaseSettingSection {
                 processed++;
                 statusBarItem.setText(`Batch tagging progress: ${processed}/${total}`);
             } catch (error) {
-                console.error(`Error processing file ${file.path}:`, error);
+                // Handle the error without using console.error
+                processed++;
+                statusBarItem.setText(`Error with file ${file.path}. Continuing...`);
             }
         }
         

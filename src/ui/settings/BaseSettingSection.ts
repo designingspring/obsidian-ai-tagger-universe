@@ -1,4 +1,3 @@
-import type { Plugin } from 'obsidian';
 import type AITaggerPlugin from '../../main';
 import type { AITaggerSettingTab } from './AITaggerSettingTab';
 

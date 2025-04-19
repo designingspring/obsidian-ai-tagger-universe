@@ -1,14 +1,14 @@
-import { App, Modal, ButtonComponent, Setting } from 'obsidian';
+import { App, Modal, ButtonComponent } from 'obsidian';
 import AITaggerPlugin from '../../main';
-import { getVaultItems, VaultItem, getPathStrings } from '../../utils/vaultPathFetcher';
+import { getVaultItems, VaultItem } from '../../utils/vaultPathFetcher';
 
 export class ExcludedFilesModal extends Modal {
     private excludedFolders: string[] = [];
     private filterInput!: HTMLInputElement;
     private pathDropdownContainer!: HTMLElement;
-    private searchTerm: string = '';
+    private searchTerm = '';
     private cachedPaths: VaultItem[] = [];
-    private hasLoadedPaths: boolean = false;
+    private hasLoadedPaths = false;
 
     private documentClickListener = (event: MouseEvent) => {
         const target = event.target as Node;
