@@ -26,16 +26,16 @@ export class TaggingSettingsSection extends BaseSettingSection {
     }
 
     display(): void {
-        this.containerEl.createEl('h1', { text: 'Tagging settings' });
+        this.containerEl.createEl('h1', { text: 'Tagging Settings' });
 
         new Setting(this.containerEl)
             .setName('Tagging mode')
             .setDesc('Choose how tags should be generated')
             .addDropdown(dropdown => dropdown
                 .addOptions({
-                    [TaggingMode.PredefinedTags]: 'Use predefined tags only',
+                    // [TaggingMode.PredefinedTags]: 'Use predefined tags only',
                     [TaggingMode.GenerateNew]: 'Generate new tags',
-                    [TaggingMode.Hybrid]: 'Hybrid mode (Generate + Predefined)'
+                    // [TaggingMode.Hybrid]: 'Hybrid mode (Generate + Predefined)'
                 })
                 .setValue(this.plugin.settings.taggingMode)
                 .onChange(async (value) => {
@@ -294,8 +294,24 @@ export class TaggingSettingsSection extends BaseSettingSection {
         // Apply initial visibility
         this.updateVisibility();
 
+        new Setting(this.containerEl)
+            .setName('Output language')
+            .setDesc('Language for generating tags')
+            .addDropdown(dropdown => {
+                // Add language options
+                const options: Record<string, string> = LanguageUtils.getLanguageOptions();
+
+                return dropdown
+                    .addOptions(options)
+                    .setValue(this.plugin.settings.language)
+                    .onChange(async (value) => {
+                        this.plugin.settings.language = value as any;
+                        await this.plugin.saveSettings();
+                    });
+            });
+
         // File exclusion Setting
-        this.containerEl.createEl('h3', { text: 'File exclusion' });
+        this.containerEl.createEl('h3', { text: 'File Exclusion' });
         
         const excludedFoldersSetting = new Setting(this.containerEl)
             .setName('Excluded files and folders')
@@ -342,7 +358,29 @@ export class TaggingSettingsSection extends BaseSettingSection {
         );
 
         // Tag Range Settings
-        this.containerEl.createEl('h3', { text: 'Tag range settings' });
+        this.containerEl.createEl('h3', { text: 'Tag Range Settings' });
+
+        new Setting(this.containerEl)
+            .setName('Maximum new tags')
+            .setDesc('Maximum number of new tags to generate (0-10). Used in Generate and Hybrid modes.')
+            .addSlider(slider => {
+                const container = slider.sliderEl.parentElement;
+                if (container) {
+                    const numberDisplay = container.createSpan({ cls: 'value-display' });
+                    numberDisplay.style.marginLeft = '10px';
+                    numberDisplay.setText(String(this.plugin.settings.tagRangeGenerateMax));
+
+                    slider.setLimits(0, 10, 1)
+                        .setValue(this.plugin.settings.tagRangeGenerateMax)
+                        .setDynamicTooltip()
+                        .onChange(async (value) => {
+                            numberDisplay.setText(String(value));
+                            this.plugin.settings.tagRangeGenerateMax = value;
+                            await this.plugin.saveSettings();
+                        });
+                }
+                return slider;
+            });
 
         new Setting(this.containerEl)
             .setName('Maximum predefined tags')
@@ -364,44 +402,6 @@ export class TaggingSettingsSection extends BaseSettingSection {
                         });
                 }
                 return slider;
-            });
-
-        new Setting(this.containerEl)
-            .setName('Maximum generated tags')
-            .setDesc('Maximum number of new tags to generate (0-10). Used in Generate and Hybrid modes.')
-            .addSlider(slider => {
-                const container = slider.sliderEl.parentElement;
-                if (container) {
-                    const numberDisplay = container.createSpan({ cls: 'value-display' });
-                    numberDisplay.style.marginLeft = '10px';
-                    numberDisplay.setText(String(this.plugin.settings.tagRangeGenerateMax));
-                    
-                    slider.setLimits(0, 10, 1)
-                        .setValue(this.plugin.settings.tagRangeGenerateMax)
-                        .setDynamicTooltip()
-                        .onChange(async (value) => {
-                            numberDisplay.setText(String(value));
-                            this.plugin.settings.tagRangeGenerateMax = value;
-                            await this.plugin.saveSettings();
-                        });
-                }
-                return slider;
-            });
-
-        new Setting(this.containerEl)
-            .setName('Output language')
-            .setDesc('Language for generating tags')
-            .addDropdown(dropdown => {
-                // Add language options
-                const options: Record<string, string> = LanguageUtils.getLanguageOptions();
-                
-                return dropdown
-                    .addOptions(options)
-                    .setValue(this.plugin.settings.language)
-                    .onChange(async (value) => {
-                        this.plugin.settings.language = value as any;
-                        await this.plugin.saveSettings();
-                    });
             });
     }
 }

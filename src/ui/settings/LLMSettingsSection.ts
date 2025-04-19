@@ -8,7 +8,7 @@ export class LLMSettingsSection extends BaseSettingSection {
     private statusEl: HTMLElement | null = null;
 
     display(): void {
-        this.containerEl.createEl('h1', { text: 'LLM settings' });
+        this.containerEl.createEl('h1', { text: 'LLM Settings' });
         this.createServiceTypeDropdown();
         this.plugin.settings.serviceType === 'local' ? 
             this.displayLocalSettings() : 

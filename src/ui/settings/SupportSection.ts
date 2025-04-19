@@ -5,7 +5,7 @@ import { BaseSettingSection } from './BaseSettingSection';
 export class SupportSection extends BaseSettingSection {
 
     display(): void {
-        this.containerEl.createEl('h1', { text: 'Support developer' });
+        this.containerEl.createEl('h1', { text: 'Support the Developer' });
 
         const supportEl = this.containerEl.createDiv({ cls: 'support-container' });
         supportEl.createSpan({text: 'If you find this plugin helpful, consider buying me a coffee ☕️'});
