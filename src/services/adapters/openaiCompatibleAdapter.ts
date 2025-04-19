@@ -13,18 +13,6 @@ interface OpenAICompatibleRequestExtension {
     [key: string]: unknown;
 }
 
-interface OpenAICompatibleResponse {
-    choices?: Array<{
-        message?: {
-            content?: string;
-        };
-        text?: string;
-    }>;
-    error?: {
-        message: string;
-    };
-}
-
 interface OpenAICompatibleErrorResponse {
     response?: {
         data?: {
@@ -79,36 +67,41 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
         return body;
     }
 
-    public parseResponse(response: Record<string, unknown>): BaseResponse {
+    protected override _parseResponseInternal(response: unknown): BaseResponse {
         try {
-            const openaiResponse = response as OpenAICompatibleResponse;
-            let content: string | undefined;
+            const responseObj = response as Record<string, unknown>;
+            const choices = responseObj.choices as Array<{message?: {content?: string}}> | undefined;
             
-            // Handle different response formats
-            if (openaiResponse.choices?.[0]?.message?.content) {
-                content = openaiResponse.choices[0].message.content;
-            } else if (openaiResponse.choices?.[0]?.text) {
-                // Some OpenAI-compatible APIs might use 'text' instead of 'message.content'
-                content = openaiResponse.choices[0].text;
-            } else {
+            if (!choices || !Array.isArray(choices) || choices.length === 0) {
+                throw new Error('Invalid response format: missing choices array');
+            }
+            
+            const content = choices[0]?.message?.content;
+            if (!content) {
                 throw new Error('Invalid response format: missing content');
             }
-
-            if (!content) {
-                throw new Error('Response content is empty');
+            
+            // Try to extract JSON from content
+            try {
+                const jsonContent = this.extractJsonFromContent(content);
+                
+                // Check for expected fields
+                const matchedTags = Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [];
+                const newTags = Array.isArray(jsonContent.newTags) ? jsonContent.newTags : [];
+                
+                return {
+                    text: content,
+                    matchedExistingTags: matchedTags,
+                    suggestedTags: newTags
+                };
+            } catch (jsonError) {
+                // If we failed to parse JSON, return the content with empty tags
+                return {
+                    text: content,
+                    matchedExistingTags: [],
+                    suggestedTags: []
+                };
             }
-
-            const jsonContent = this.extractJsonFromContent(content);
-
-            if (!Array.isArray(jsonContent?.matchedTags) || !Array.isArray(jsonContent?.newTags)) {
-                throw new Error('Invalid response format: missing required arrays');
-            }
-
-            return {
-                text: content,
-                matchedExistingTags: jsonContent.matchedTags,
-                suggestedTags: jsonContent.newTags
-            };
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             throw new Error(`Failed to parse response: ${message}`);

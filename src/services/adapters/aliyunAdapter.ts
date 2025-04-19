@@ -58,7 +58,7 @@ export class AliyunAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: Record<string, unknown>): BaseResponse {
+    protected override _parseResponseInternal(response: unknown): BaseResponse {
         try {
             const aliyunResponse = response as AliyunResponse;
             const content = aliyunResponse.choices?.[0]?.message?.content;
@@ -99,16 +99,16 @@ export class AliyunAdapter extends BaseAdapter {
             }
             
             // Check if the expected arrays exist
-            if (!Array.isArray(jsonContent?.matchedTags) && !Array.isArray(jsonContent?.newTags)) {
+            if (!jsonContent || (!Array.isArray(jsonContent.matchedTags) && !Array.isArray(jsonContent.newTags))) {
                 // Try alternative field names that might be used
-                const matchedTags = Array.isArray(jsonContent?.matchedExistingTags) ? 
+                const matchedTags = jsonContent && Array.isArray(jsonContent.matchedExistingTags) ? 
                     jsonContent.matchedExistingTags : 
-                    Array.isArray(jsonContent?.existingTags) ? 
+                    jsonContent && Array.isArray(jsonContent.existingTags) ? 
                         jsonContent.existingTags : [];
                 
-                const newTags = Array.isArray(jsonContent?.suggestedTags) ? 
+                const newTags = jsonContent && Array.isArray(jsonContent.suggestedTags) ? 
                     jsonContent.suggestedTags : 
-                    Array.isArray(jsonContent?.generatedTags) ? 
+                    jsonContent && Array.isArray(jsonContent.generatedTags) ? 
                         jsonContent.generatedTags : [];
                 
                 if (matchedTags.length > 0 || newTags.length > 0) {
@@ -120,7 +120,7 @@ export class AliyunAdapter extends BaseAdapter {
                 }
                 
                 // If we have a tags array but not separated into matched/new
-                if (Array.isArray(jsonContent?.tags)) {
+                if (jsonContent && Array.isArray(jsonContent.tags)) {
                     return {
                         text: content,
                         matchedExistingTags: [],
@@ -158,7 +158,7 @@ export class AliyunAdapter extends BaseAdapter {
         }
         
         const errorObj = error as AliyunErrorResponse;
-        if (errorObj.response?.data?.error?.message) {
+        if (errorObj.response && errorObj.response.data && errorObj.response.data.error && errorObj.response.data.error.message) {
             return errorObj.response.data.error.message;
         }
         return errorObj.message || 'Unknown error occurred';
@@ -168,7 +168,7 @@ export class AliyunAdapter extends BaseAdapter {
         return {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.config.apiKey}`,
-            ...(this.provider?.requestFormat.headers || {})
+            ...(this.provider && this.provider.requestFormat.headers || {})
         };
     }
 }

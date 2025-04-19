@@ -1,5 +1,5 @@
 export * from './types';
-export * from './baseAdapter';
+export { BaseAdapter } from './baseAdapter';
 export * from './openaiAdapter';
 export * from './geminiAdapter';
 export * from './openaiCompatibleAdapter';

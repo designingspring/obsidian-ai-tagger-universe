@@ -81,45 +81,70 @@ export class VertexAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: Record<string, unknown>): BaseResponse {
+    protected override _parseResponseInternal(response: unknown): BaseResponse {
         try {
-            // Use a safer type assertion with proper type checking
-            const predictions = response.predictions as unknown;
-            if (!predictions || !Array.isArray(predictions)) {
-                throw new Error('Invalid response format: missing predictions array');
+            const vertexResponse = response as Record<string, unknown>;
+            // Extract the content from the Vertex AI response
+            const predictions = vertexResponse.predictions as Array<Record<string, unknown>>;
+            
+            if (!predictions || !Array.isArray(predictions) || predictions.length === 0) {
+                throw new Error('Invalid response format: missing predictions');
             }
             
-            const firstPrediction = predictions[0] as Record<string, unknown>;
-            if (!firstPrediction) {
-                throw new Error('Invalid response format: empty predictions array');
+            const firstPrediction = predictions[0];
+            // For Gemini model
+            if (firstPrediction.content) {
+                const parts = firstPrediction.content as Record<string, unknown>;
+                const partsList = parts.parts as Array<Record<string, unknown>>;
+                if (!partsList || !Array.isArray(partsList) || partsList.length === 0) {
+                    throw new Error('Invalid response format: missing parts');
+                }
+                const text = partsList[0].text as string;
+                if (!text) {
+                    throw new Error('Invalid response format: missing text');
+                }
+                
+                // Try to extract JSON from the text
+                try {
+                    const jsonContent = this.extractJsonFromContent(text);
+                    return {
+                        text: text,
+                        matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+                        suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+                    };
+                } catch (jsonError) {
+                    // If JSON extraction fails, return the text with empty tags
+                    return {
+                        text: text,
+                        matchedExistingTags: [],
+                        suggestedTags: []
+                    };
+                }
             }
             
-            const candidates = firstPrediction.candidates as unknown;
-            if (!candidates || !Array.isArray(candidates)) {
-                throw new Error('Invalid response format: missing candidates array');
+            // For PaLM model
+            if (typeof firstPrediction.content === 'string') {
+                const content = firstPrediction.content as string;
+                
+                // Try to extract JSON from the content
+                try {
+                    const jsonContent = this.extractJsonFromContent(content);
+                    return {
+                        text: content,
+                        matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+                        suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+                    };
+                } catch (jsonError) {
+                    // If JSON extraction fails, return the content with empty tags
+                    return {
+                        text: content,
+                        matchedExistingTags: [],
+                        suggestedTags: []
+                    };
+                }
             }
             
-            const firstCandidate = candidates[0] as Record<string, unknown>;
-            if (!firstCandidate) {
-                throw new Error('Invalid response format: empty candidates array');
-            }
-            
-            const content = firstCandidate.content as string;
-            if (!content) {
-                throw new Error('Invalid response format: missing content');
-            }
-
-            const jsonContent = this.extractJsonFromContent(content);
-
-            if (!Array.isArray(jsonContent?.matchedTags) || !Array.isArray(jsonContent?.newTags)) {
-                throw new Error('Invalid response format: missing required arrays');
-            }
-
-            return {
-                text: content,
-                matchedExistingTags: jsonContent.matchedTags,
-                suggestedTags: jsonContent.newTags
-            };
+            throw new Error('Invalid response format: unsupported Vertex AI model response');
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             throw new Error(`Failed to parse Vertex AI response: ${message}`);

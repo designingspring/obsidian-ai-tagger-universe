@@ -49,7 +49,7 @@ export class OpenRouterAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: Record<string, unknown>): BaseResponse {
+    protected override _parseResponseInternal(response: unknown): BaseResponse {
         try {
             const openRouterResponse = response as OpenRouterResponse;
             const content = openRouterResponse.choices?.[0]?.message?.content;

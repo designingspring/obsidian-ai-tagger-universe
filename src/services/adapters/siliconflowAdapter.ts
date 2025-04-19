@@ -97,7 +97,7 @@ export class SiliconflowAdapter extends BaseAdapter {
     }
   }
 
-  parseResponse(response: Record<string, unknown>): BaseResponse {
+  protected override _parseResponseInternal(response: unknown): BaseResponse {
     try {
       let result: unknown = response;
       for (const key of this.provider.responseFormat.path) {

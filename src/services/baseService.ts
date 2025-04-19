@@ -3,6 +3,7 @@ import { buildTagPrompt, TAG_SYSTEM_PROMPT } from './prompts/tagPrompts';
 import { TaggingMode } from './prompts/types';
 import { LanguageCode } from './types';
 import { App } from 'obsidian';
+import { RequestBody } from './adapters/types';
 
 /**
  * Base class for LLM service implementations
@@ -32,7 +33,7 @@ export abstract class BaseLLMService {
      * @param language - Optional language code
      * @returns Formatted request body
      */
-    public formatRequest(prompt: string, _language?: string): any {
+    public formatRequest(prompt: string, _language?: string): RequestBody {
         // Default OpenAI-compatible format
         return {
             model: this.modelName,
@@ -310,7 +311,7 @@ export abstract class BaseLLMService {
      * @param content - Raw content to process (string or object)
      * @returns Object with tags array
      */
-    protected processTagsFromResponse(content: any): { tags: string[] } {
+    protected processTagsFromResponse(content: unknown): { tags: string[] } {
         try {
             // console.log('Processing tags from raw response:', JSON.stringify(content));
             
@@ -335,21 +336,22 @@ export abstract class BaseLLMService {
                 // console.log('Response is array, joined as:', textContent);
             } else if (typeof content === 'object' && content !== null) {
                 //console.log('Response is object:', JSON.stringify(content));
+                const contentObj = content as Record<string, unknown>;
                 // Try multiple ways to extract tags
                 // First check for standard tag fields
                 const candidateFields = ['tags', 'tag', 'matchedExistingTags', 'suggestedTags', 'matchedTags', 'newTags', 'content', 'results'];
                 
                 for (const field of candidateFields) {
-                    if (Array.isArray(content[field])) {
+                    if (Array.isArray(contentObj[field])) {
                         // Prioritize array fields
-                        textContent = content[field]
-                            .filter((tag: any) => tag !== null && tag !== undefined)
+                        textContent = (contentObj[field] as unknown[])
+                            .filter((tag: unknown) => tag !== null && tag !== undefined)
                             .join(', ');
                         //console.log(`Found array field "${field}":`, textContent);
                         break;
-                    } else if (typeof content[field] === 'string' && content[field].trim()) {
+                    } else if (typeof contentObj[field] === 'string' && (contentObj[field] as string).trim()) {
                         // String fields can also be used
-                        textContent = content[field].trim();
+                        textContent = (contentObj[field] as string).trim();
                         //console.log(`Found string field "${field}":`, textContent);
                         break;
                     }
@@ -357,7 +359,7 @@ export abstract class BaseLLMService {
                 
                 // If no standard fields, try to extract any possible string
                 if (!textContent) {
-                    Object.entries(content).some(([, value]) => {
+                    Object.entries(contentObj).some(([, value]) => {
                         if (typeof value === 'string' && value.trim()) {
                             textContent = value.trim();
                             //console.log(`Using string value from field:`, textContent);
@@ -365,7 +367,7 @@ export abstract class BaseLLMService {
                         } else if (Array.isArray(value) && value.length > 0) {
                             // Try simple arrays
                             textContent = value
-                                .filter((item: any) => item !== null && item !== undefined)
+                                .filter((item: unknown) => item !== null && item !== undefined)
                                 .join(', ');
                             //console.log(`Using array value from field:`, textContent);
                             return true;
@@ -397,7 +399,7 @@ export abstract class BaseLLMService {
                     } else if (typeof jsonContent === 'object' && jsonContent !== null && Array.isArray(jsonContent.tags)) {
                         // Use JSON object with tags field
                         tags = jsonContent.tags
-                            .map((tag: any) => typeof tag === 'string' ? tag.trim() : String(tag).trim())
+                            .map((tag: unknown) => typeof tag === 'string' ? tag.trim() : String(tag).trim())
                             .filter((tag: string) => tag.length > 0);
                         //console.log('Parsed JSON object with tags field:', tags);
                     }

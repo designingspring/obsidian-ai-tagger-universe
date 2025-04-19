@@ -2,24 +2,6 @@ import { BaseAdapter } from './baseAdapter';
 import { BaseResponse, RequestBody, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
 
-// Define interface for different Bedrock model response formats
-interface BedrockClaudeResponse {
-    completion?: string;
-}
-
-interface BedrockTitanResponse {
-    results?: Array<{
-        outputText?: string;
-    }>;
-}
-
-interface BedrockGenericResponse {
-    generation?: string;
-}
-
-// Combined type for all Bedrock response formats
-type BedrockResponse = BedrockClaudeResponse & BedrockTitanResponse & BedrockGenericResponse;
-
 // Define interface for Bedrock error response structure
 interface BedrockErrorResponse {
     errorMessage?: string;
@@ -90,35 +72,85 @@ export class BedrockAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: Record<string, unknown>): BaseResponse {
+    protected override _parseResponseInternal(response: unknown): BaseResponse {
         try {
-            const bedrockResponse = response as BedrockResponse;
+            const bedrockResponse = response as Record<string, unknown>;
+            // Bedrock responses vary by model, so we need to handle different formats
             let content = '';
-            const modelName = this.config.modelName || '';
             
-            if (modelName.includes('claude')) {
-                content = bedrockResponse.completion || '';
-            } else if (modelName.includes('titan')) {
-                content = bedrockResponse.results?.[0]?.outputText || '';
-            } else {
-                content = bedrockResponse.generation || '';
+            // Claude model response format
+            if (bedrockResponse.completion) {
+                content = bedrockResponse.completion as string;
             }
-
+            // Titan model response format
+            else if (bedrockResponse.results && Array.isArray(bedrockResponse.results) && bedrockResponse.results.length > 0) {
+                content = bedrockResponse.results[0].outputText as string;
+            }
+            // LLama 2 response format
+            else if (bedrockResponse.generation) {
+                content = bedrockResponse.generation as string;
+            }
+            // Unknown format - try to use the response object directly
+            else {
+                // Try to extract content from known paths
+                let contentObj: unknown = bedrockResponse;
+                for (const key of this.provider.responseFormat.path) {
+                    if (contentObj && typeof contentObj === 'object') {
+                        contentObj = (contentObj as Record<string, unknown>)[key as string];
+                    } else {
+                        break;
+                    }
+                }
+                
+                // At this point, contentObj should contain the content, if it exists
+                if (typeof contentObj === 'string') {
+                    content = contentObj;
+                } else {
+                    content = JSON.stringify(contentObj);
+                }
+            }
+            
             if (!content) {
-                throw new Error('Invalid response format: missing content');
+                throw new Error('Invalid response format: unable to extract content');
             }
-
-            const jsonContent = this.extractJsonFromContent(content);
-
-            if (!Array.isArray(jsonContent?.matchedTags) || !Array.isArray(jsonContent?.newTags)) {
-                throw new Error('Invalid response format: missing required arrays');
+            
+            // Try to extract JSON from the content
+            try {
+                const jsonContent = this.extractJsonFromContent(content);
+                
+                // Check if both required arrays exist
+                if (jsonContent && (Array.isArray(jsonContent.matchedTags) || Array.isArray(jsonContent.newTags))) {
+                    return {
+                        text: content,
+                        matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+                        suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+                    };
+                }
+                
+                // Try alternative field names
+                const matchedTags = Array.isArray(jsonContent.matchedExistingTags) ? 
+                    jsonContent.matchedExistingTags : 
+                    [];
+                    
+                const newTags = Array.isArray(jsonContent.suggestedTags) ? 
+                    jsonContent.suggestedTags : 
+                    Array.isArray(jsonContent.tags) ? 
+                        jsonContent.tags : 
+                        [];
+                
+                return {
+                    text: content,
+                    matchedExistingTags: matchedTags,
+                    suggestedTags: newTags
+                };
+            } catch (jsonError) {
+                // If we failed to extract JSON, return empty arrays
+                return {
+                    text: content,
+                    matchedExistingTags: [],
+                    suggestedTags: []
+                };
             }
-
-            return {
-                text: content,
-                matchedExistingTags: jsonContent.matchedTags,
-                suggestedTags: jsonContent.newTags
-            };
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             throw new Error(`Failed to parse Bedrock response: ${message}`);

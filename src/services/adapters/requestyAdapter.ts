@@ -2,6 +2,18 @@ import { BaseAdapter } from './baseAdapter';
 import { BaseResponse, RequestBody, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
 
+// Define interface for Requesty response structure
+interface RequestyResponse {
+    choices?: Array<{
+        message?: {
+            content?: string;
+        };
+    }>;
+    error?: {
+        message: string;
+    };
+}
+
 export class RequestyAdapter extends BaseAdapter {
     private readonly defaultConfig = {
         temperature: 0.7,
@@ -40,22 +52,36 @@ export class RequestyAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    protected override _parseResponseInternal(response: unknown): BaseResponse {
         try {
-            const content = response.choices?.[0]?.message?.content;
+            const requestyResponse = response as RequestyResponse;
+            if (requestyResponse.error) {
+                throw new Error(requestyResponse.error.message || 'Unknown error');
+            }
+
+            // Extract the content (choices[0].message.content)
+            const content = requestyResponse.choices?.[0]?.message?.content;
             if (!content) {
                 throw new Error('Invalid response format: missing content');
             }
 
-            const jsonContent = this.extractJsonFromContent(content);
-            if (!Array.isArray(jsonContent?.matchedTags) || !Array.isArray(jsonContent?.newTags)) {
-                throw new Error('Invalid response format: missing required arrays');
+            // Extract tags from content
+            let matchedTags: string[] = [];
+            let newTags: string[] = [];
+
+            try {
+                const jsonContent = this.extractJsonFromContent(content);
+                matchedTags = Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [];
+                newTags = Array.isArray(jsonContent.newTags) ? jsonContent.newTags : [];
+            } catch (jsonError) {
+                // Fallback - if JSON extraction fails, just return empty arrays
+                newTags = [];
             }
 
             return {
                 text: content,
-                matchedExistingTags: jsonContent.matchedTags,
-                suggestedTags: jsonContent.newTags
+                matchedExistingTags: matchedTags,
+                suggestedTags: newTags
             };
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
@@ -76,11 +102,31 @@ export class RequestyAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
-        return error.error?.message ||
-            error.response?.data?.error?.message ||
-            error.message ||
-            'Unknown error occurred';
+    public extractError(error: unknown): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+        
+        const errorObj = error as Record<string, unknown>;
+        const errorProp = errorObj.error as Record<string, unknown> | undefined;
+        
+        if (errorProp?.message && typeof errorProp.message === 'string') {
+            return errorProp.message;
+        }
+        
+        const response = errorObj.response as Record<string, unknown> | undefined;
+        const data = response?.data as Record<string, unknown> | undefined;
+        const dataError = data?.error as Record<string, unknown> | undefined;
+        
+        if (dataError?.message && typeof dataError.message === 'string') {
+            return dataError.message;
+        }
+        
+        if (errorObj.message && typeof errorObj.message === 'string') {
+            return errorObj.message;
+        }
+        
+        return 'Unknown error occurred';
     }
 
     public getHeaders(): Record<string, string> {

@@ -1,6 +1,8 @@
-import { BaseAdapter } from "./baseAdapter";
-import { BaseResponse, AdapterConfig } from "./types";
+import { BaseAdapter } from './baseAdapter';
+import { BaseResponse, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
+import { TaggingMode } from '../prompts/types';
+import { LLMResponse } from '../types';
 
 // Define specific interface for Deepseek responses
 interface DeepseekResponse {
@@ -56,7 +58,27 @@ export class DeepseekAdapter extends BaseAdapter {
     return null;
   }
 
-  parseResponse(response: Record<string, unknown>): BaseResponse {
+  parseResponse(response: string, mode: TaggingMode, maxTags: number): LLMResponse {
+    try {
+      // Parse the response to JSON first
+      const jsonResponse = JSON.parse(response) as Record<string, unknown>;
+      // Use the internal method to process the response
+      const baseResponse = this._parseResponse(jsonResponse);
+      
+      // Convert to LLMResponse format
+      return {
+        matchedExistingTags: baseResponse.matchedExistingTags || [],
+        suggestedTags: baseResponse.suggestedTags || [],
+        tags: [...(baseResponse.matchedExistingTags || []), ...(baseResponse.suggestedTags || [])]
+      };
+    } catch (error) {
+      // Fall back to the base implementation
+      return super.parseResponse(response, mode, maxTags);
+    }
+  }
+
+  // Override the internal parse method for Deepseek-specific logic
+  protected override _parseResponseInternal(response: unknown): BaseResponse {
     try {
       const deepseekResponse = response as DeepseekResponse;
       let result: unknown = response;
@@ -80,8 +102,12 @@ export class DeepseekAdapter extends BaseAdapter {
       
       return {
         text: content,
-        matchedExistingTags: jsonContent.matchedTags || [],
-        suggestedTags: jsonContent.newTags || []
+        matchedExistingTags: Array.isArray(jsonContent.matchedTags) 
+          ? jsonContent.matchedTags.map(String)
+          : [],
+        suggestedTags: Array.isArray(jsonContent.newTags)
+          ? jsonContent.newTags.map(String)
+          : []
       };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';

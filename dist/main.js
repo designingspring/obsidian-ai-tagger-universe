@@ -493,18 +493,19 @@ var BaseLLMService = class {
       } else if (Array.isArray(content)) {
         textContent = content.filter((item) => item !== null && item !== void 0).join(", ");
       } else if (typeof content === "object" && content !== null) {
+        const contentObj = content;
         const candidateFields = ["tags", "tag", "matchedExistingTags", "suggestedTags", "matchedTags", "newTags", "content", "results"];
         for (const field of candidateFields) {
-          if (Array.isArray(content[field])) {
-            textContent = content[field].filter((tag) => tag !== null && tag !== void 0).join(", ");
+          if (Array.isArray(contentObj[field])) {
+            textContent = contentObj[field].filter((tag) => tag !== null && tag !== void 0).join(", ");
             break;
-          } else if (typeof content[field] === "string" && content[field].trim()) {
-            textContent = content[field].trim();
+          } else if (typeof contentObj[field] === "string" && contentObj[field].trim()) {
+            textContent = contentObj[field].trim();
             break;
           }
         }
         if (!textContent) {
-          Object.entries(content).some(([, value]) => {
+          Object.entries(contentObj).some(([, value]) => {
             if (typeof value === "string" && value.trim()) {
               textContent = value.trim();
               return true;
@@ -856,20 +857,30 @@ var BaseAdapter = class extends BaseLLMService {
     }
     return super.formatRequest(prompt, language);
   }
-  parseResponse(response) {
+  /**
+   * Internal method to parse response from cloud provider
+   * @param response - Response from the provider
+   * @returns BaseResponse with processed tags
+   */
+  _parseResponse(response) {
     var _a, _b;
     if (!((_b = (_a = this.provider) == null ? void 0 : _a.responseFormat) == null ? void 0 : _b.path)) {
       throw new Error("Provider response format not configured");
     }
     try {
-      if (response.error && this.provider.responseFormat.errorPath) {
-        let errorMsg = response;
+      const responseObj = response;
+      if (responseObj.error && this.provider.responseFormat.errorPath) {
+        let errorMsg = responseObj;
         for (const key of this.provider.responseFormat.errorPath) {
-          errorMsg = errorMsg[key];
+          if (typeof errorMsg === "object" && errorMsg !== null) {
+            errorMsg = errorMsg[key];
+          } else {
+            break;
+          }
         }
-        throw new Error(errorMsg || "Unknown error");
+        throw new Error(typeof errorMsg === "string" ? errorMsg : "Unknown error");
       }
-      let result = response;
+      let result = responseObj;
       for (const key of this.provider.responseFormat.path) {
         if (!result || typeof result !== "object") {
           throw new Error("Invalid response structure");
@@ -877,25 +888,110 @@ var BaseAdapter = class extends BaseLLMService {
         result = result[key];
       }
       if (typeof result === "string") {
+        const stringResult = result;
         try {
-          result = this.extractJsonFromContent(result);
+          result = this.extractJsonFromContent(stringResult);
         } catch (error) {
-          const tags = this.extractTagsFromText(result);
+          const tags = this.extractTagsFromText(stringResult);
           result = {
             matchedTags: [],
             newTags: tags
           };
         }
       }
-      if (result.matchedTags && !Array.isArray(result.matchedTags)) {
-        result.matchedTags = [];
+      const resultObj = result;
+      if (resultObj.matchedTags && !Array.isArray(resultObj.matchedTags)) {
+        resultObj.matchedTags = [];
       }
-      if (result.newTags && !Array.isArray(result.newTags)) {
-        result.newTags = [];
+      if (resultObj.newTags && !Array.isArray(resultObj.newTags)) {
+        resultObj.newTags = [];
       }
-      result.matchedTags = (result.matchedTags || []).map((tag) => String(tag).trim());
-      result.newTags = (result.newTags || []).map((tag) => String(tag).trim());
-      return result;
+      const matchedTags = Array.isArray(resultObj.matchedTags) ? resultObj.matchedTags.map((tag) => String(tag).trim()) : [];
+      const newTags = Array.isArray(resultObj.newTags) ? resultObj.newTags.map((tag) => String(tag).trim()) : [];
+      return {
+        text: typeof resultObj.text === "string" ? resultObj.text : "",
+        matchedExistingTags: matchedTags,
+        suggestedTags: newTags
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      throw new Error(`Failed to parse response: ${message}`);
+    }
+  }
+  /**
+   * Override of BaseLLMService parseResponse
+   * This maintains compatibility with the base class
+   */
+  parseResponse(response, mode, maxTags) {
+    try {
+      const jsonResponse = JSON.parse(response);
+      const baseResponse = this._parseResponseInternal(jsonResponse);
+      return {
+        matchedExistingTags: baseResponse.matchedExistingTags || [],
+        suggestedTags: baseResponse.suggestedTags || [],
+        tags: [...baseResponse.matchedExistingTags || [], ...baseResponse.suggestedTags || []]
+      };
+    } catch (error) {
+      return super.parseResponse(response, mode, maxTags);
+    }
+  }
+  /**
+   * Internal method for parsing response
+   * This should be overridden by child classes that need custom parsing logic
+   * @param response - The response object to parse
+   * @returns BaseResponse with processed tags
+   */
+  _parseResponseInternal(response) {
+    var _a, _b;
+    if (!((_b = (_a = this.provider) == null ? void 0 : _a.responseFormat) == null ? void 0 : _b.path)) {
+      throw new Error("Provider response format not configured");
+    }
+    try {
+      const responseObj = response;
+      if (responseObj.error && this.provider.responseFormat.errorPath) {
+        let errorMsg = responseObj;
+        for (const key of this.provider.responseFormat.errorPath) {
+          if (typeof errorMsg === "object" && errorMsg !== null) {
+            errorMsg = errorMsg[key];
+          } else {
+            break;
+          }
+        }
+        throw new Error(typeof errorMsg === "string" ? errorMsg : "Unknown error");
+      }
+      let result = responseObj;
+      for (const key of this.provider.responseFormat.path) {
+        if (!result || typeof result !== "object") {
+          throw new Error("Invalid response structure");
+        }
+        result = result[key];
+      }
+      if (typeof result === "string") {
+        const stringResult = result;
+        try {
+          result = this.extractJsonFromContent(stringResult);
+        } catch (error) {
+          const tags = this.extractTagsFromText(stringResult);
+          result = {
+            matchedTags: [],
+            newTags: tags
+          };
+        }
+      }
+      const resultObj = result;
+      if (resultObj.matchedTags && !Array.isArray(resultObj.matchedTags)) {
+        resultObj.matchedTags = [];
+      }
+      if (resultObj.newTags && !Array.isArray(resultObj.newTags)) {
+        resultObj.newTags = [];
+      }
+      const matchedTags = Array.isArray(resultObj.matchedTags) ? resultObj.matchedTags.map((tag) => String(tag).trim()) : [];
+      const newTags = Array.isArray(resultObj.newTags) ? resultObj.newTags.map((tag) => String(tag).trim()) : [];
+      return {
+        text: typeof resultObj.text === "string" ? resultObj.text : "",
+        matchedExistingTags: matchedTags,
+        suggestedTags: newTags
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to parse response: ${message}`);
@@ -921,17 +1017,29 @@ var BaseAdapter = class extends BaseLLMService {
   validateConfig() {
     return super.validateConfig();
   }
-  async analyzeTags(content, _existingTags) {
-    const prompt = this.buildPrompt(content, [], "generate" /* GenerateNew */, 10, this.config.language);
-    const result = await this.makeRequest(prompt);
-    return this.parseResponse(result);
+  /**
+   * Implementation of the base analyzeTags method
+   */
+  async analyzeTags(content, candidateTags = [], mode = "generate" /* GenerateNew */, maxTags = 10, language) {
+    const prompt = this.buildPrompt(content, candidateTags, mode, maxTags, language);
+    const response = await this.sendRequest(prompt);
+    return this.parseResponse(response, mode, maxTags);
   }
   async testConnection() {
     try {
       await this.makeRequest("test");
-      return { result: { success: true } };
+      return {
+        result: "success" /* Success */
+      };
     } catch (error) {
-      return { result: { success: false }, error };
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return {
+        result: "failed" /* Failed */,
+        error: {
+          type: "unknown",
+          message
+        }
+      };
     }
   }
   async makeRequest(prompt) {
@@ -989,12 +1097,16 @@ var BaseAdapter = class extends BaseLLMService {
    * @returns The extracted content as a string
    */
   parseResponseContent(response) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b;
     try {
+      const responseObj = response;
       if (!((_b = (_a = this.provider) == null ? void 0 : _a.responseFormat) == null ? void 0 : _b.contentPath)) {
-        return ((_e = (_d = (_c = response.choices) == null ? void 0 : _c[0]) == null ? void 0 : _d.message) == null ? void 0 : _e.content) || "";
+        const choices = responseObj.choices;
+        const firstChoice = choices == null ? void 0 : choices[0];
+        const message = firstChoice == null ? void 0 : firstChoice.message;
+        return (message == null ? void 0 : message.content) || "";
       }
-      let content = response;
+      let content = responseObj;
       for (const key of this.provider.responseFormat.contentPath) {
         if (!content || typeof content !== "object") {
           throw new Error("Invalid response structure");
@@ -1127,26 +1239,34 @@ var OpenAICompatibleAdapter = class extends BaseAdapter {
     }
     return body;
   }
-  parseResponse(response) {
-    var _a, _b, _c, _d, _e;
+  _parseResponseInternal(response) {
+    var _a, _b;
     try {
-      let content;
-      if ((_c = (_b = (_a = response.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) {
-        content = response.choices[0].message.content;
-      } else if ((_e = (_d = response.choices) == null ? void 0 : _d[0]) == null ? void 0 : _e.text) {
-        content = response.choices[0].text;
-      } else {
+      const responseObj = response;
+      const choices = responseObj.choices;
+      if (!choices || !Array.isArray(choices) || choices.length === 0) {
+        throw new Error("Invalid response format: missing choices array");
+      }
+      const content = (_b = (_a = choices[0]) == null ? void 0 : _a.message) == null ? void 0 : _b.content;
+      if (!content) {
         throw new Error("Invalid response format: missing content");
       }
-      const jsonContent = this.extractJsonFromContent(content);
-      if (!Array.isArray(jsonContent == null ? void 0 : jsonContent.matchedTags) || !Array.isArray(jsonContent == null ? void 0 : jsonContent.newTags)) {
-        throw new Error("Invalid response format: missing required arrays");
+      try {
+        const jsonContent = this.extractJsonFromContent(content);
+        const matchedTags = Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [];
+        const newTags = Array.isArray(jsonContent.newTags) ? jsonContent.newTags : [];
+        return {
+          text: content,
+          matchedExistingTags: matchedTags,
+          suggestedTags: newTags
+        };
+      } catch (jsonError) {
+        return {
+          text: content,
+          matchedExistingTags: [],
+          suggestedTags: []
+        };
       }
-      return {
-        text: content,
-        matchedExistingTags: jsonContent.matchedTags,
-        suggestedTags: jsonContent.newTags
-      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to parse response: ${message}`);
@@ -1166,13 +1286,17 @@ var OpenAICompatibleAdapter = class extends BaseAdapter {
   }
   extractError(error) {
     var _a, _b, _c, _d, _e;
-    if ((_c = (_b = (_a = error.response) == null ? void 0 : _a.data) == null ? void 0 : _b.error) == null ? void 0 : _c.message) {
-      return error.response.data.error.message;
+    if (error instanceof Error) {
+      return error.message;
     }
-    if ((_e = (_d = error.response) == null ? void 0 : _d.data) == null ? void 0 : _e.message) {
-      return error.response.data.message;
+    const errorObj = error;
+    if ((_c = (_b = (_a = errorObj.response) == null ? void 0 : _a.data) == null ? void 0 : _b.error) == null ? void 0 : _c.message) {
+      return errorObj.response.data.error.message;
     }
-    return error.message || "Unknown error occurred";
+    if ((_e = (_d = errorObj.response) == null ? void 0 : _d.data) == null ? void 0 : _e.message) {
+      return errorObj.response.data.message;
+    }
+    return errorObj.message || "Unknown error occurred";
   }
   getHeaders() {
     var _a;
@@ -1227,13 +1351,28 @@ var DeepseekAdapter = class extends BaseAdapter {
     }
     return null;
   }
-  parseResponse(response) {
+  parseResponse(response, mode, maxTags) {
+    try {
+      const jsonResponse = JSON.parse(response);
+      const baseResponse = this._parseResponse(jsonResponse);
+      return {
+        matchedExistingTags: baseResponse.matchedExistingTags || [],
+        suggestedTags: baseResponse.suggestedTags || [],
+        tags: [...baseResponse.matchedExistingTags || [], ...baseResponse.suggestedTags || []]
+      };
+    } catch (error) {
+      return super.parseResponse(response, mode, maxTags);
+    }
+  }
+  // Override the internal parse method for Deepseek-specific logic
+  _parseResponseInternal(response) {
     var _a, _b, _c;
     try {
+      const deepseekResponse = response;
       let result = response;
       let content = "";
-      if ((_c = (_b = (_a = response.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) {
-        content = response.choices[0].message.content;
+      if ((_c = (_b = (_a = deepseekResponse.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) {
+        content = deepseekResponse.choices[0].message.content;
       }
       for (const key of this.provider.responseFormat.path) {
         if (!result || typeof result !== "object") {
@@ -1244,8 +1383,8 @@ var DeepseekAdapter = class extends BaseAdapter {
       const jsonContent = this.extractJsonFromContent(content);
       return {
         text: content,
-        matchedExistingTags: jsonContent.matchedTags || [],
-        suggestedTags: jsonContent.newTags || []
+        matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags.map(String) : [],
+        suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags.map(String) : []
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -1276,10 +1415,11 @@ var AliyunAdapter = class extends BaseAdapter {
       }
     };
   }
-  parseResponse(response) {
+  _parseResponseInternal(response) {
     var _a, _b, _c;
     try {
-      const content = (_c = (_b = (_a = response.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
+      const aliyunResponse = response;
+      const content = (_c = (_b = (_a = aliyunResponse.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
       if (!content) {
         throw new Error("Invalid response format: missing content");
       }
@@ -1290,6 +1430,8 @@ var AliyunAdapter = class extends BaseAdapter {
         try {
           if (typeof content === "string" && (content.trim().startsWith("{") && content.trim().endsWith("}"))) {
             jsonContent = JSON.parse(content);
+          } else {
+            throw new Error("Not a valid JSON string");
           }
         } catch (directParseError) {
         }
@@ -1303,9 +1445,9 @@ var AliyunAdapter = class extends BaseAdapter {
           };
         }
       }
-      if (!Array.isArray(jsonContent == null ? void 0 : jsonContent.matchedTags) && !Array.isArray(jsonContent == null ? void 0 : jsonContent.newTags)) {
-        const matchedTags = Array.isArray(jsonContent == null ? void 0 : jsonContent.matchedExistingTags) ? jsonContent.matchedExistingTags : Array.isArray(jsonContent == null ? void 0 : jsonContent.existingTags) ? jsonContent.existingTags : [];
-        const newTags = Array.isArray(jsonContent == null ? void 0 : jsonContent.suggestedTags) ? jsonContent.suggestedTags : Array.isArray(jsonContent == null ? void 0 : jsonContent.generatedTags) ? jsonContent.generatedTags : [];
+      if (!jsonContent || !Array.isArray(jsonContent.matchedTags) && !Array.isArray(jsonContent.newTags)) {
+        const matchedTags = jsonContent && Array.isArray(jsonContent.matchedExistingTags) ? jsonContent.matchedExistingTags : jsonContent && Array.isArray(jsonContent.existingTags) ? jsonContent.existingTags : [];
+        const newTags = jsonContent && Array.isArray(jsonContent.suggestedTags) ? jsonContent.suggestedTags : jsonContent && Array.isArray(jsonContent.generatedTags) ? jsonContent.generatedTags : [];
         if (matchedTags.length > 0 || newTags.length > 0) {
           return {
             text: content,
@@ -1313,7 +1455,7 @@ var AliyunAdapter = class extends BaseAdapter {
             suggestedTags: newTags
           };
         }
-        if (Array.isArray(jsonContent == null ? void 0 : jsonContent.tags)) {
+        if (jsonContent && Array.isArray(jsonContent.tags)) {
           return {
             text: content,
             matchedExistingTags: [],
@@ -1342,18 +1484,20 @@ var AliyunAdapter = class extends BaseAdapter {
     return null;
   }
   extractError(error) {
-    var _a, _b, _c;
-    if ((_c = (_b = (_a = error.response) == null ? void 0 : _a.data) == null ? void 0 : _b.error) == null ? void 0 : _c.message) {
-      return error.response.data.error.message;
+    if (error instanceof Error) {
+      return error.message;
     }
-    return error.message || "Unknown error occurred";
+    const errorObj = error;
+    if (errorObj.response && errorObj.response.data && errorObj.response.data.error && errorObj.response.data.error.message) {
+      return errorObj.response.data.error.message;
+    }
+    return errorObj.message || "Unknown error occurred";
   }
   getHeaders() {
-    var _a;
     return {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${this.config.apiKey}`,
-      ...((_a = this.provider) == null ? void 0 : _a.requestFormat.headers) || {}
+      ...this.provider && this.provider.requestFormat.headers || {}
     };
   }
 };
@@ -1435,22 +1579,39 @@ var GroqAdapter = class extends BaseAdapter {
       temperature: this.defaultConfig.temperature
     };
   }
-  parseResponse(response) {
-    var _a, _b, _c;
+  _parseResponseInternal(response) {
     try {
-      const content = (_c = (_b = (_a = response.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
+      const groqResponse = response;
+      const choices = groqResponse.choices;
+      if (!choices || !Array.isArray(choices) || choices.length === 0) {
+        throw new Error("Invalid response format: missing choices array");
+      }
+      const firstChoice = choices[0];
+      if (!firstChoice || typeof firstChoice !== "object") {
+        throw new Error("Invalid response format: invalid first choice");
+      }
+      const message = firstChoice.message;
+      if (!message || typeof message !== "object") {
+        throw new Error("Invalid response format: missing message object");
+      }
+      const content = message.content;
       if (!content) {
         throw new Error("Invalid response format: missing content");
       }
-      const jsonContent = this.extractJsonFromContent(content);
-      if (!Array.isArray(jsonContent == null ? void 0 : jsonContent.matchedTags) || !Array.isArray(jsonContent == null ? void 0 : jsonContent.newTags)) {
-        throw new Error("Invalid response format: missing required arrays");
+      try {
+        const jsonContent = this.extractJsonFromContent(content);
+        return {
+          text: content,
+          matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+          suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+        };
+      } catch (jsonError) {
+        return {
+          text: content,
+          matchedExistingTags: [],
+          suggestedTags: []
+        };
       }
-      return {
-        text: content,
-        matchedExistingTags: jsonContent.matchedTags,
-        suggestedTags: jsonContent.newTags
-      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to parse Groq response: ${message}`);
@@ -1467,7 +1628,11 @@ var GroqAdapter = class extends BaseAdapter {
   }
   extractError(error) {
     var _a, _b, _c, _d;
-    const message = ((_a = error.error) == null ? void 0 : _a.message) || ((_d = (_c = (_b = error.response) == null ? void 0 : _b.data) == null ? void 0 : _c.error) == null ? void 0 : _d.message) || error.message || "Unknown error occurred";
+    if (error instanceof Error) {
+      return error.message;
+    }
+    const errorObj = error;
+    const message = ((_a = errorObj.error) == null ? void 0 : _a.message) || ((_d = (_c = (_b = errorObj.response) == null ? void 0 : _b.data) == null ? void 0 : _c.error) == null ? void 0 : _d.message) || errorObj.message || "Unknown error occurred";
     return message;
   }
   getHeaders() {
@@ -1541,22 +1706,57 @@ var VertexAdapter = class extends BaseAdapter {
       }
     };
   }
-  parseResponse(response) {
-    var _a, _b, _c, _d;
+  _parseResponseInternal(response) {
     try {
-      const content = (_d = (_c = (_b = (_a = response.predictions) == null ? void 0 : _a[0]) == null ? void 0 : _b.candidates) == null ? void 0 : _c[0]) == null ? void 0 : _d.content;
-      if (!content) {
-        throw new Error("Invalid response format: missing content");
+      const vertexResponse = response;
+      const predictions = vertexResponse.predictions;
+      if (!predictions || !Array.isArray(predictions) || predictions.length === 0) {
+        throw new Error("Invalid response format: missing predictions");
       }
-      const jsonContent = this.extractJsonFromContent(content);
-      if (!Array.isArray(jsonContent == null ? void 0 : jsonContent.matchedTags) || !Array.isArray(jsonContent == null ? void 0 : jsonContent.newTags)) {
-        throw new Error("Invalid response format: missing required arrays");
+      const firstPrediction = predictions[0];
+      if (firstPrediction.content) {
+        const parts = firstPrediction.content;
+        const partsList = parts.parts;
+        if (!partsList || !Array.isArray(partsList) || partsList.length === 0) {
+          throw new Error("Invalid response format: missing parts");
+        }
+        const text = partsList[0].text;
+        if (!text) {
+          throw new Error("Invalid response format: missing text");
+        }
+        try {
+          const jsonContent = this.extractJsonFromContent(text);
+          return {
+            text,
+            matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+            suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+          };
+        } catch (jsonError) {
+          return {
+            text,
+            matchedExistingTags: [],
+            suggestedTags: []
+          };
+        }
       }
-      return {
-        text: content,
-        matchedExistingTags: jsonContent.matchedTags,
-        suggestedTags: jsonContent.newTags
-      };
+      if (typeof firstPrediction.content === "string") {
+        const content = firstPrediction.content;
+        try {
+          const jsonContent = this.extractJsonFromContent(content);
+          return {
+            text: content,
+            matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+            suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+          };
+        } catch (jsonError) {
+          return {
+            text: content,
+            matchedExistingTags: [],
+            suggestedTags: []
+          };
+        }
+      }
+      throw new Error("Invalid response format: unsupported Vertex AI model response");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to parse Vertex AI response: ${message}`);
@@ -1573,7 +1773,11 @@ var VertexAdapter = class extends BaseAdapter {
   }
   extractError(error) {
     var _a, _b, _c, _d;
-    const message = ((_a = error.error) == null ? void 0 : _a.message) || ((_d = (_c = (_b = error.response) == null ? void 0 : _b.data) == null ? void 0 : _c.error) == null ? void 0 : _d.message) || error.message || "Unknown error occurred";
+    if (error instanceof Error) {
+      return error.message;
+    }
+    const errorObj = error;
+    const message = ((_a = errorObj.error) == null ? void 0 : _a.message) || ((_d = (_c = (_b = errorObj.response) == null ? void 0 : _b.data) == null ? void 0 : _c.error) == null ? void 0 : _d.message) || "Unknown error occurred";
     return message;
   }
   getHeaders() {
@@ -1615,10 +1819,11 @@ var OpenRouterAdapter = class extends BaseAdapter {
       }
     };
   }
-  parseResponse(response) {
+  _parseResponseInternal(response) {
     var _a, _b, _c;
     try {
-      const content = (_c = (_b = (_a = response.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
+      const openRouterResponse = response;
+      const content = (_c = (_b = (_a = openRouterResponse.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
       if (!content) {
         throw new Error("Invalid response format: missing content");
       }
@@ -1650,7 +1855,11 @@ var OpenRouterAdapter = class extends BaseAdapter {
   }
   extractError(error) {
     var _a, _b, _c, _d;
-    return ((_a = error.error) == null ? void 0 : _a.message) || ((_d = (_c = (_b = error.response) == null ? void 0 : _b.data) == null ? void 0 : _c.error) == null ? void 0 : _d.message) || error.message || "Unknown error occurred";
+    if (error instanceof Error) {
+      return error.message;
+    }
+    const errorObj = error;
+    return ((_a = errorObj.error) == null ? void 0 : _a.message) || ((_d = (_c = (_b = errorObj.response) == null ? void 0 : _b.data) == null ? void 0 : _c.error) == null ? void 0 : _d.message) || errorObj.message || "Unknown error occurred";
   }
   getHeaders() {
     if (!this.config.apiKey) {
@@ -1724,30 +1933,57 @@ Assistant: `,
       ...this.defaultConfig
     };
   }
-  parseResponse(response) {
-    var _a, _b;
+  _parseResponseInternal(response) {
     try {
+      const bedrockResponse = response;
       let content = "";
-      const modelName = this.config.modelName || "";
-      if (modelName.includes("claude")) {
-        content = response.completion || "";
-      } else if (modelName.includes("titan")) {
-        content = ((_b = (_a = response.results) == null ? void 0 : _a[0]) == null ? void 0 : _b.outputText) || "";
+      if (bedrockResponse.completion) {
+        content = bedrockResponse.completion;
+      } else if (bedrockResponse.results && Array.isArray(bedrockResponse.results) && bedrockResponse.results.length > 0) {
+        content = bedrockResponse.results[0].outputText;
+      } else if (bedrockResponse.generation) {
+        content = bedrockResponse.generation;
       } else {
-        content = response.generation || "";
+        let contentObj = bedrockResponse;
+        for (const key of this.provider.responseFormat.path) {
+          if (contentObj && typeof contentObj === "object") {
+            contentObj = contentObj[key];
+          } else {
+            break;
+          }
+        }
+        if (typeof contentObj === "string") {
+          content = contentObj;
+        } else {
+          content = JSON.stringify(contentObj);
+        }
       }
       if (!content) {
-        throw new Error("Invalid response format: missing content");
+        throw new Error("Invalid response format: unable to extract content");
       }
-      const jsonContent = this.extractJsonFromContent(content);
-      if (!Array.isArray(jsonContent == null ? void 0 : jsonContent.matchedTags) || !Array.isArray(jsonContent == null ? void 0 : jsonContent.newTags)) {
-        throw new Error("Invalid response format: missing required arrays");
+      try {
+        const jsonContent = this.extractJsonFromContent(content);
+        if (jsonContent && (Array.isArray(jsonContent.matchedTags) || Array.isArray(jsonContent.newTags))) {
+          return {
+            text: content,
+            matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+            suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+          };
+        }
+        const matchedTags = Array.isArray(jsonContent.matchedExistingTags) ? jsonContent.matchedExistingTags : [];
+        const newTags = Array.isArray(jsonContent.suggestedTags) ? jsonContent.suggestedTags : Array.isArray(jsonContent.tags) ? jsonContent.tags : [];
+        return {
+          text: content,
+          matchedExistingTags: matchedTags,
+          suggestedTags: newTags
+        };
+      } catch (jsonError) {
+        return {
+          text: content,
+          matchedExistingTags: [],
+          suggestedTags: []
+        };
       }
-      return {
-        text: content,
-        matchedExistingTags: jsonContent.matchedTags,
-        suggestedTags: jsonContent.newTags
-      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to parse Bedrock response: ${message}`);
@@ -1767,7 +2003,11 @@ Assistant: `,
   }
   extractError(error) {
     var _a, _b;
-    return error.errorMessage || ((_b = (_a = error.response) == null ? void 0 : _a.data) == null ? void 0 : _b.errorMessage) || error.message || "Unknown error occurred";
+    if (error instanceof Error) {
+      return error.message;
+    }
+    const errorObj = error;
+    return errorObj.errorMessage || ((_b = (_a = errorObj.response) == null ? void 0 : _a.data) == null ? void 0 : _b.errorMessage) || errorObj.message || "Unknown error occurred";
   }
   getHeaders() {
     return {
@@ -1813,21 +2053,30 @@ var RequestyAdapter = class extends BaseAdapter {
       ...this.defaultConfig
     };
   }
-  parseResponse(response) {
+  _parseResponseInternal(response) {
     var _a, _b, _c;
     try {
-      const content = (_c = (_b = (_a = response.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
+      const requestyResponse = response;
+      if (requestyResponse.error) {
+        throw new Error(requestyResponse.error.message || "Unknown error");
+      }
+      const content = (_c = (_b = (_a = requestyResponse.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
       if (!content) {
         throw new Error("Invalid response format: missing content");
       }
-      const jsonContent = this.extractJsonFromContent(content);
-      if (!Array.isArray(jsonContent == null ? void 0 : jsonContent.matchedTags) || !Array.isArray(jsonContent == null ? void 0 : jsonContent.newTags)) {
-        throw new Error("Invalid response format: missing required arrays");
+      let matchedTags = [];
+      let newTags = [];
+      try {
+        const jsonContent = this.extractJsonFromContent(content);
+        matchedTags = Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [];
+        newTags = Array.isArray(jsonContent.newTags) ? jsonContent.newTags : [];
+      } catch (jsonError) {
+        newTags = [];
       }
       return {
         text: content,
-        matchedExistingTags: jsonContent.matchedTags,
-        suggestedTags: jsonContent.newTags
+        matchedExistingTags: matchedTags,
+        suggestedTags: newTags
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -1847,8 +2096,24 @@ var RequestyAdapter = class extends BaseAdapter {
     return null;
   }
   extractError(error) {
-    var _a, _b, _c, _d;
-    return ((_a = error.error) == null ? void 0 : _a.message) || ((_d = (_c = (_b = error.response) == null ? void 0 : _b.data) == null ? void 0 : _c.error) == null ? void 0 : _d.message) || error.message || "Unknown error occurred";
+    if (error instanceof Error) {
+      return error.message;
+    }
+    const errorObj = error;
+    const errorProp = errorObj.error;
+    if ((errorProp == null ? void 0 : errorProp.message) && typeof errorProp.message === "string") {
+      return errorProp.message;
+    }
+    const response = errorObj.response;
+    const data = response == null ? void 0 : response.data;
+    const dataError = data == null ? void 0 : data.error;
+    if ((dataError == null ? void 0 : dataError.message) && typeof dataError.message === "string") {
+      return dataError.message;
+    }
+    if (errorObj.message && typeof errorObj.message === "string") {
+      return errorObj.message;
+    }
+    return "Unknown error occurred";
   }
   getHeaders() {
     var _a;
@@ -1902,21 +2167,32 @@ var CohereAdapter = class extends BaseAdapter {
       connectors: []
     };
   }
-  parseResponse(response) {
+  _parseResponseInternal(response) {
+    var _a;
     try {
-      const content = response.text;
+      const responseObj = response;
+      const generationsArr = responseObj.generations;
+      if (!generationsArr || !Array.isArray(generationsArr) || generationsArr.length === 0) {
+        throw new Error("Invalid response format: missing generations array");
+      }
+      const content = (_a = generationsArr[0]) == null ? void 0 : _a.text;
       if (!content) {
-        throw new Error("Invalid response format: missing content");
+        throw new Error("Invalid response format: missing text in first generation");
       }
-      const jsonContent = this.extractJsonFromContent(content);
-      if (!Array.isArray(jsonContent == null ? void 0 : jsonContent.matchedTags) || !Array.isArray(jsonContent == null ? void 0 : jsonContent.newTags)) {
-        throw new Error("Invalid response format: missing required arrays");
+      try {
+        const jsonContent = this.extractJsonFromContent(content);
+        return {
+          text: content,
+          matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+          suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+        };
+      } catch (jsonError) {
+        return {
+          text: content,
+          matchedExistingTags: [],
+          suggestedTags: []
+        };
       }
-      return {
-        text: content,
-        matchedExistingTags: jsonContent.matchedTags,
-        suggestedTags: jsonContent.newTags
-      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to parse Cohere response: ${message}`);
@@ -1935,8 +2211,21 @@ var CohereAdapter = class extends BaseAdapter {
     return null;
   }
   extractError(error) {
-    var _a, _b;
-    return error.message || ((_b = (_a = error.response) == null ? void 0 : _a.data) == null ? void 0 : _b.message) || "Unknown error occurred";
+    if (error instanceof Error) {
+      return error.message;
+    }
+    const errorObj = error;
+    if (typeof errorObj.message === "string") {
+      return errorObj.message;
+    }
+    const response = errorObj.response;
+    if (response && typeof response === "object") {
+      const data = response.data;
+      if (data && typeof data === "object" && typeof data.message === "string") {
+        return data.message;
+      }
+    }
+    return "Unknown error occurred";
   }
   getHeaders() {
     if (!this.config.apiKey) {
@@ -1986,22 +2275,47 @@ var GrokAdapter = class extends BaseAdapter {
       ...this.defaultConfig
     };
   }
-  parseResponse(response) {
-    var _a, _b, _c;
+  _parseResponseInternal(response) {
     try {
-      const content = (_c = (_b = (_a = response.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content;
-      if (!content) {
-        throw new Error("Invalid response format: missing content");
+      const grokResponse = response;
+      const candidates = grokResponse.candidates;
+      if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
+        throw new Error("Invalid response format: missing candidates array");
       }
-      const jsonContent = this.extractJsonFromContent(content);
-      if (!Array.isArray(jsonContent == null ? void 0 : jsonContent.matchedTags) || !Array.isArray(jsonContent == null ? void 0 : jsonContent.newTags)) {
-        throw new Error("Invalid response format: missing required arrays");
+      const firstCandidate = candidates[0];
+      if (!firstCandidate || typeof firstCandidate !== "object") {
+        throw new Error("Invalid response format: first candidate is not an object");
       }
-      return {
-        text: content,
-        matchedExistingTags: jsonContent.matchedTags,
-        suggestedTags: jsonContent.newTags
-      };
+      const content = firstCandidate.content;
+      if (!content || typeof content !== "object") {
+        throw new Error("Invalid response format: missing content object");
+      }
+      const parts = Array.isArray(content.parts) ? content.parts : void 0;
+      if (!parts || parts.length === 0) {
+        throw new Error("Invalid response format: missing parts array");
+      }
+      const firstPart = parts[0];
+      if (!firstPart || typeof firstPart !== "object") {
+        throw new Error("Invalid response format: first part is not an object");
+      }
+      const text = firstPart.text;
+      if (!text || typeof text !== "string") {
+        throw new Error("Invalid response format: missing text content");
+      }
+      try {
+        const jsonContent = this.extractJsonFromContent(text);
+        return {
+          text,
+          matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+          suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+        };
+      } catch (jsonError) {
+        return {
+          text,
+          matchedExistingTags: [],
+          suggestedTags: []
+        };
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new Error(`Failed to parse Grok response: ${message}`);
@@ -2020,8 +2334,24 @@ var GrokAdapter = class extends BaseAdapter {
     return null;
   }
   extractError(error) {
-    var _a, _b, _c, _d;
-    return ((_a = error.error) == null ? void 0 : _a.message) || ((_d = (_c = (_b = error.response) == null ? void 0 : _b.data) == null ? void 0 : _c.error) == null ? void 0 : _d.message) || error.message || "Unknown error occurred";
+    if (error instanceof Error) {
+      return error.message;
+    }
+    const errorObj = error;
+    const errorProp = errorObj.error;
+    if ((errorProp == null ? void 0 : errorProp.message) && typeof errorProp.message === "string") {
+      return errorProp.message;
+    }
+    const response = errorObj.response;
+    const data = response == null ? void 0 : response.data;
+    const dataError = data == null ? void 0 : data.error;
+    if ((dataError == null ? void 0 : dataError.message) && typeof dataError.message === "string") {
+      return dataError.message;
+    }
+    if (errorObj.message && typeof errorObj.message === "string") {
+      return errorObj.message;
+    }
+    return "Unknown error occurred";
   }
   getHeaders() {
     if (!this.config.apiKey) {
