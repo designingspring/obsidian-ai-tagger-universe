@@ -1,5 +1,5 @@
 import { LLMServiceConfig, LLMResponse, ConnectionTestResult, ConnectionTestError } from './types';
-import { buildTagPrompt, SYSTEM_PROMPT } from './prompts/tagPrompts';
+import { buildTagPrompt, TAG_SYSTEM_PROMPT } from './prompts/tagPrompts';
 import { TaggingMode } from './prompts/types';
 import { LanguageCode } from './types';
 import { App, Notice } from 'obsidian';
@@ -37,7 +37,7 @@ export abstract class BaseLLMService {
         return {
             model: this.modelName,
             messages: [
-                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'system', content: TAG_SYSTEM_PROMPT },
                 { role: 'user', content: prompt }
             ],
             temperature: 0.3

@@ -1,6 +1,6 @@
 import { BaseLLMService } from "../baseService";
 import { AdapterConfig } from "./types";
-import { SYSTEM_PROMPT } from "../prompts/tagPrompts";
+import { TAG_SYSTEM_PROMPT } from "../prompts/tagPrompts";
 import { TaggingMode } from "../prompts/types";
 
 export abstract class BaseAdapter extends BaseLLMService {
@@ -20,7 +20,7 @@ export abstract class BaseAdapter extends BaseLLMService {
             return {
                 ...this.provider.requestFormat.body,
                 messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
+                    { role: 'system', content: TAG_SYSTEM_PROMPT },
                     { role: 'user', content: prompt }
                 ]
             };

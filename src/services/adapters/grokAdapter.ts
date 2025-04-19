@@ -1,7 +1,7 @@
 import { BaseAdapter } from './baseAdapter';
 import { BaseResponse, RequestBody, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
-import { SYSTEM_PROMPT } from '../prompts/tagPrompts';
+import { TAG_SYSTEM_PROMPT } from '../prompts/tagPrompts';
 
 export class GrokAdapter extends BaseAdapter {
     private readonly defaultConfig = {

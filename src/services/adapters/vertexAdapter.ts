@@ -1,7 +1,7 @@
 import { BaseAdapter } from './baseAdapter';
 import { BaseResponse, RequestBody, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
-import { SYSTEM_PROMPT } from '../prompts/tagPrompts';
+import { TAG_SYSTEM_PROMPT } from '../prompts/tagPrompts';
 
 export class VertexAdapter extends BaseAdapter {
     private readonly defaultConfig = {
@@ -39,7 +39,7 @@ export class VertexAdapter extends BaseAdapter {
         const messages = [
             {
                 role: 'system',
-                content: SYSTEM_PROMPT
+                content: TAG_SYSTEM_PROMPT
             },
             {
                 role: 'user',

@@ -1,5 +1,5 @@
 import { BaseAdapter } from './baseAdapter';
-import { SYSTEM_PROMPT } from '../prompts/tagPrompts';
+import { TAG_SYSTEM_PROMPT } from '../prompts/tagPrompts';
 import { BaseResponse, RequestBody, LLMServiceProvider, AdapterConfig } from './types';
 
 export class OpenAICompatibleAdapter extends BaseAdapter {
@@ -27,7 +27,7 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
             model: this.config.modelName,
             messages: [{
                 role: 'system',
-                content: SYSTEM_PROMPT
+                content: TAG_SYSTEM_PROMPT
             }, {
                 role: 'user',
                 content: prompt
