@@ -23,6 +23,7 @@ export interface RequestBody {
     }>;
     max_tokens?: number;
     temperature?: number;
+    [key: string]: unknown; // Allow additional properties for different LLM providers
 }
 
 export interface AdapterRequestParams {
@@ -62,7 +63,7 @@ export interface LLMServiceProvider {
     requestFormat: {
         url?: string;
         headers?: Record<string, string>;
-        body?: any;
+        body?: Record<string, unknown>;
     };
     responseFormat: {
         path: (string | number)[];

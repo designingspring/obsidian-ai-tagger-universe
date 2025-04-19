@@ -1,5 +1,20 @@
 import { BaseAdapter } from "./baseAdapter";
-import { AdapterConfig, RequestBody } from "./types";
+import { AdapterConfig, RequestBody, BaseResponse } from "./types";
+import { ConnectionTestResult, ConnectionTestError } from "../types";
+
+// Define more specific types for Siliconflow error responses
+interface SiliconflowErrorResponse {
+  error?: {
+    message: string;
+  };
+  response?: {
+    data?: {
+      error?: {
+        message: string;
+      };
+    };
+  };
+}
 
 export class SiliconflowAdapter extends BaseAdapter {
   constructor(config: AdapterConfig) {
@@ -51,7 +66,7 @@ export class SiliconflowAdapter extends BaseAdapter {
     return null;
   }
 
-  async testConnection(): Promise<{ result: any; error?: any }> {
+  async testConnection(): Promise<{ result: ConnectionTestResult; error?: ConnectionTestError }> {
     try {
       const response = await fetch(`${this.getEndpoint()}/v1/chat/completions`, {
         method: 'POST',
@@ -60,23 +75,48 @@ export class SiliconflowAdapter extends BaseAdapter {
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        return { result: null, error: error.error?.message || 'Connection test failed' };
+        const errorData = await response.json() as SiliconflowErrorResponse;
+        return { 
+          result: ConnectionTestResult.Failed, 
+          error: {
+            type: "network",
+            message: errorData.error?.message || 'Connection test failed'
+          }
+        };
       }
       
-      return { result: { success: true } };
+      return { result: ConnectionTestResult.Success };
     } catch (error) {
-      return { result: null, error: error instanceof Error ? error.message : 'Unknown error' };
+      return { 
+        result: ConnectionTestResult.Failed, 
+        error: {
+          type: "unknown",
+          message: error instanceof Error ? error.message : 'Unknown error'
+        }
+      };
     }
   }
 
-  parseResponse(response: any): any {
+  protected override _parseResponseInternal(response: unknown): BaseResponse {
     try {
-      let result = response;
+      let result: unknown = response;
       for (const key of this.provider.responseFormat.path) {
-        result = result[key];
+        if (result === null || typeof result !== 'object') {
+          throw new Error('Invalid response structure');
+        }
+        result = (result as Record<string | number, unknown>)[key];
       }
-      return result;
+      
+      const content = result as string;
+      if (typeof content !== 'string') {
+        throw new Error('Invalid response content type');
+      }
+      
+      return {
+        text: content,
+        matchedExistingTags: [],
+        suggestedTags: []
+      };
     } catch (error) {
       throw new Error('Failed to parse Siliconflow response');
     }

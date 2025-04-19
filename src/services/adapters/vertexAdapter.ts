@@ -3,6 +3,20 @@ import { BaseResponse, RequestBody, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
 import { TAG_SYSTEM_PROMPT } from '../prompts/tagPrompts';
 
+// Define more specific types for Vertex API error responses
+interface VertexErrorResponse {
+    error?: {
+        message: string;
+    };
+    response?: {
+        data?: {
+            error?: {
+                message: string;
+            };
+        };
+    };
+}
+
 export class VertexAdapter extends BaseAdapter {
     private readonly defaultConfig = {
         temperature: 0.7,
@@ -67,24 +81,70 @@ export class VertexAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    protected override _parseResponseInternal(response: unknown): BaseResponse {
         try {
-            const content = response.predictions?.[0]?.candidates?.[0]?.content;
-            if (!content) {
-                throw new Error('Invalid response format: missing content');
+            const vertexResponse = response as Record<string, unknown>;
+            // Extract the content from the Vertex AI response
+            const predictions = vertexResponse.predictions as Array<Record<string, unknown>>;
+            
+            if (!predictions || !Array.isArray(predictions) || predictions.length === 0) {
+                throw new Error('Invalid response format: missing predictions');
             }
-
-            const jsonContent = this.extractJsonFromContent(content);
-
-            if (!Array.isArray(jsonContent?.matchedTags) || !Array.isArray(jsonContent?.newTags)) {
-                throw new Error('Invalid response format: missing required arrays');
+            
+            const firstPrediction = predictions[0];
+            // For Gemini model
+            if (firstPrediction.content) {
+                const parts = firstPrediction.content as Record<string, unknown>;
+                const partsList = parts.parts as Array<Record<string, unknown>>;
+                if (!partsList || !Array.isArray(partsList) || partsList.length === 0) {
+                    throw new Error('Invalid response format: missing parts');
+                }
+                const text = partsList[0].text as string;
+                if (!text) {
+                    throw new Error('Invalid response format: missing text');
+                }
+                
+                // Try to extract JSON from the text
+                try {
+                    const jsonContent = this.extractJsonFromContent(text);
+                    return {
+                        text: text,
+                        matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+                        suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+                    };
+                } catch (jsonError) {
+                    // If JSON extraction fails, return the text with empty tags
+                    return {
+                        text: text,
+                        matchedExistingTags: [],
+                        suggestedTags: []
+                    };
+                }
             }
-
-            return {
-                text: content,
-                matchedExistingTags: jsonContent.matchedTags,
-                suggestedTags: jsonContent.newTags
-            };
+            
+            // For PaLM model
+            if (typeof firstPrediction.content === 'string') {
+                const content = firstPrediction.content as string;
+                
+                // Try to extract JSON from the content
+                try {
+                    const jsonContent = this.extractJsonFromContent(content);
+                    return {
+                        text: content,
+                        matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+                        suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+                    };
+                } catch (jsonError) {
+                    // If JSON extraction fails, return the content with empty tags
+                    return {
+                        text: content,
+                        matchedExistingTags: [],
+                        suggestedTags: []
+                    };
+                }
+            }
+            
+            throw new Error('Invalid response format: unsupported Vertex AI model response');
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             throw new Error(`Failed to parse Vertex AI response: ${message}`);
@@ -101,12 +161,17 @@ export class VertexAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
+    public extractError(error: Record<string, unknown> | Error): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+
+        const errorObj = error as VertexErrorResponse;
         const message = 
-            error.error?.message ||
-            error.response?.data?.error?.message ||
-            error.message ||
+            errorObj.error?.message ||
+            errorObj.response?.data?.error?.message ||
             'Unknown error occurred';
+            
         return message;
     }
 

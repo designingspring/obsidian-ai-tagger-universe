@@ -2,6 +2,21 @@ import { BaseAdapter } from './baseAdapter';
 import { BaseResponse, RequestBody, AdapterConfig } from './types';
 import * as endpoints from './cloudEndpoints.json';
 
+// Define specific interface for Groq error responses
+interface GroqErrorResponse {
+    error?: {
+        message: string;
+    };
+    response?: {
+        data?: {
+            error?: {
+                message: string;
+            };
+        };
+    };
+    message?: string;
+}
+
 export class GroqAdapter extends BaseAdapter {
     private readonly defaultConfig = {
         temperature: 0.7,
@@ -40,24 +55,47 @@ export class GroqAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    protected override _parseResponseInternal(response: unknown): BaseResponse {
         try {
-            const content = response.choices?.[0]?.message?.content;
+            const groqResponse = response as Record<string, unknown>;
+            const choices = groqResponse.choices as Array<Record<string, unknown>> | undefined;
+            
+            if (!choices || !Array.isArray(choices) || choices.length === 0) {
+                throw new Error('Invalid response format: missing choices array');
+            }
+            
+            const firstChoice = choices[0];
+            if (!firstChoice || typeof firstChoice !== 'object') {
+                throw new Error('Invalid response format: invalid first choice');
+            }
+            
+            const message = firstChoice.message as Record<string, unknown> | undefined;
+            if (!message || typeof message !== 'object') {
+                throw new Error('Invalid response format: missing message object');
+            }
+            
+            const content = message.content as string | undefined;
             if (!content) {
                 throw new Error('Invalid response format: missing content');
             }
-
-            const jsonContent = this.extractJsonFromContent(content);
-
-            if (!Array.isArray(jsonContent?.matchedTags) || !Array.isArray(jsonContent?.newTags)) {
-                throw new Error('Invalid response format: missing required arrays');
+            
+            // Process the content to extract tags
+            try {
+                const jsonContent = this.extractJsonFromContent(content);
+                
+                return {
+                    text: content,
+                    matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+                    suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+                };
+            } catch (jsonError) {
+                // If JSON extraction fails, return empty arrays
+                return {
+                    text: content,
+                    matchedExistingTags: [],
+                    suggestedTags: []
+                };
             }
-
-            return {
-                text: content,
-                matchedExistingTags: jsonContent.matchedTags,
-                suggestedTags: jsonContent.newTags
-            };
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             throw new Error(`Failed to parse Groq response: ${message}`);
@@ -74,11 +112,16 @@ export class GroqAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
+    public extractError(error: Record<string, unknown> | Error): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+
+        const errorObj = error as GroqErrorResponse;
         const message = 
-            error.error?.message ||
-            error.response?.data?.error?.message ||
-            error.message ||
+            errorObj.error?.message ||
+            errorObj.response?.data?.error?.message ||
+            errorObj.message ||
             'Unknown error occurred';
         return message;
     }

@@ -40,23 +40,57 @@ export class GrokAdapter extends BaseAdapter {
         };
     }
 
-    public parseResponse(response: any): BaseResponse {
+    protected override _parseResponseInternal(response: unknown): BaseResponse {
         try {
-            const content = response.choices?.[0]?.message?.content;
-            if (!content) {
-                throw new Error('Invalid response format: missing content');
+            const grokResponse = response as Record<string, unknown>;
+            const candidates = grokResponse.candidates as Array<Record<string, unknown>> | undefined;
+            
+            if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
+                throw new Error('Invalid response format: missing candidates array');
             }
-
-            const jsonContent = this.extractJsonFromContent(content);
-            if (!Array.isArray(jsonContent?.matchedTags) || !Array.isArray(jsonContent?.newTags)) {
-                throw new Error('Invalid response format: missing required arrays');
+            
+            const firstCandidate = candidates[0];
+            if (!firstCandidate || typeof firstCandidate !== 'object') {
+                throw new Error('Invalid response format: first candidate is not an object');
             }
-
-            return {
-                text: content,
-                matchedExistingTags: jsonContent.matchedTags,
-                suggestedTags: jsonContent.newTags
-            };
+            
+            const content = firstCandidate.content as Record<string, unknown> | undefined;
+            if (!content || typeof content !== 'object') {
+                throw new Error('Invalid response format: missing content object');
+            }
+            
+            const parts = Array.isArray(content.parts) ? content.parts : undefined;
+            if (!parts || parts.length === 0) {
+                throw new Error('Invalid response format: missing parts array');
+            }
+            
+            const firstPart = parts[0] as Record<string, unknown> | undefined;
+            if (!firstPart || typeof firstPart !== 'object') {
+                throw new Error('Invalid response format: first part is not an object');
+            }
+            
+            const text = firstPart.text as string | undefined;
+            if (!text || typeof text !== 'string') {
+                throw new Error('Invalid response format: missing text content');
+            }
+            
+            // Process the content to extract tags
+            try {
+                const jsonContent = this.extractJsonFromContent(text);
+                
+                return {
+                    text: text,
+                    matchedExistingTags: Array.isArray(jsonContent.matchedTags) ? jsonContent.matchedTags : [],
+                    suggestedTags: Array.isArray(jsonContent.newTags) ? jsonContent.newTags : []
+                };
+            } catch (jsonError) {
+                // If JSON extraction fails, return empty arrays
+                return {
+                    text: text,
+                    matchedExistingTags: [],
+                    suggestedTags: []
+                };
+            }
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             throw new Error(`Failed to parse Grok response: ${message}`);
@@ -76,11 +110,31 @@ export class GrokAdapter extends BaseAdapter {
         return null;
     }
 
-    public extractError(error: any): string {
-        return error.error?.message ||
-            error.response?.data?.error?.message ||
-            error.message ||
-            'Unknown error occurred';
+    public extractError(error: unknown): string {
+        if (error instanceof Error) {
+            return error.message;
+        }
+        
+        const errorObj = error as Record<string, unknown>;
+        const errorProp = errorObj.error as Record<string, unknown> | undefined;
+        
+        if (errorProp?.message && typeof errorProp.message === 'string') {
+            return errorProp.message;
+        }
+        
+        const response = errorObj.response as Record<string, unknown> | undefined;
+        const data = response?.data as Record<string, unknown> | undefined;
+        const dataError = data?.error as Record<string, unknown> | undefined;
+        
+        if (dataError?.message && typeof dataError.message === 'string') {
+            return dataError.message;
+        }
+        
+        if (errorObj.message && typeof errorObj.message === 'string') {
+            return errorObj.message;
+        }
+        
+        return 'Unknown error occurred';
     }
 
     public getHeaders(): Record<string, string> {
