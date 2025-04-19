@@ -15,7 +15,7 @@ import { AITaggerSettings, DEFAULT_SETTINGS } from './core/settings';
 import { AITaggerSettingTab } from './ui/settings/AITaggerSettingTab';
 import { EventHandlers } from './utils/eventHandlers';
 import { TagNetworkManager } from './utils/tagNetworkUtils';
-import { TagNetworkView, TAG_NETWORK_VIEW_TYPE } from './ui/views/TagNetworkView';
+import { TagNetworkView, TAG_NETWORK_VIEW } from './ui/views/TagNetworkView';
 import { TagOperations } from './utils/tagOperations';
 import { BatchProcessResult } from './utils/batchProcessor';
 
@@ -90,8 +90,8 @@ export default class AITaggerPlugin extends Plugin {
 
         // Register view type for tag network
         this.registerView(
-            TAG_NETWORK_VIEW_TYPE,
-            (leaf) => new TagNetworkView(leaf, this.tagNetworkManager.getNetworkData())
+            TAG_NETWORK_VIEW,
+            (leaf) => new TagNetworkView(leaf, this)
         );
 
         // Add ribbon icons with descriptive tooltips
@@ -118,7 +118,7 @@ export default class AITaggerPlugin extends Plugin {
         this.eventHandlers.cleanup();
         
         // Unregister views
-        this.app.workspace.detachLeavesOfType(TAG_NETWORK_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(TAG_NETWORK_VIEW);
         
         // Trigger layout refresh
         this.app.workspace.trigger('layout-change');
@@ -143,7 +143,7 @@ export default class AITaggerPlugin extends Plugin {
             }
 
             // Try to find existing network view
-            let leaf = this.app.workspace.getLeavesOfType(TAG_NETWORK_VIEW_TYPE)[0];
+            let leaf = this.app.workspace.getLeavesOfType(TAG_NETWORK_VIEW)[0];
             
             if (!leaf) {
                 // Create new view in right sidebar
@@ -153,11 +153,11 @@ export default class AITaggerPlugin extends Plugin {
                 }
                 
                 await newLeaf.setViewState({
-                    type: TAG_NETWORK_VIEW_TYPE,
+                    type: TAG_NETWORK_VIEW,
                     active: true
                 });
                 
-                leaf = this.app.workspace.getLeavesOfType(TAG_NETWORK_VIEW_TYPE)[0];
+                leaf = this.app.workspace.getLeavesOfType(TAG_NETWORK_VIEW)[0];
                 if (!leaf) {
                     throw new Error('Failed to initialize tag network view');
                 }

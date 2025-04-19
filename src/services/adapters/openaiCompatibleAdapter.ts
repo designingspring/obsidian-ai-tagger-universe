@@ -1,6 +1,6 @@
 import { BaseAdapter } from './baseAdapter';
 import { TAG_SYSTEM_PROMPT } from '../prompts/tagPrompts';
-import { BaseResponse, RequestBody, LLMServiceProvider, AdapterConfig } from './types';
+import { BaseResponse, RequestBody, AdapterConfig } from './types';
 
 export class OpenAICompatibleAdapter extends BaseAdapter {
     constructor(config: AdapterConfig) {
