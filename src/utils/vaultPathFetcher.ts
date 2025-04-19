@@ -1,4 +1,4 @@
-import { App, TFolder, TFile } from 'obsidian';
+import { App, TFolder } from 'obsidian';
 
 export interface VaultItem {
     path: string;
@@ -32,10 +32,7 @@ export function getVaultItems(app: App, searchTerm?: string): VaultItem[] {
  * Collect all paths from the vault in a flattened structure
  */
 function collectAllPaths(app: App, result: VaultItem[]): void {
-    // Get root folder
-    const rootFolder = app.vault.getRoot();
-    
-    // Process root folder contents
+    // Process vault contents
     const files = app.vault.getFiles();
     const folders = getAllFolders(app);
     
@@ -86,7 +83,7 @@ function getAllFolders(app: App): TFolder[] {
 /**
  * Get all flattened paths as strings
  */
-export function getPathStrings(app: App, includeFiles: boolean = true): string[] {
+export function getPathStrings(app: App, includeFiles = true): string[] {
     const items = getVaultItems(app);
     
     if (includeFiles) {

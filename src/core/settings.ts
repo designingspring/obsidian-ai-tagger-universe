@@ -22,6 +22,9 @@ export interface AITaggerSettings {
     tagRangeMatchMax: number;
     tagRangeGenerateMax: number;
     tagRangePredefinedMax: number;
+    batchTaggingFolder: string;
+    /** Array of folder paths or regex patterns for batch tagging */
+    batchTaggingFolders: string[];
 }
 
 export const DEFAULT_SETTINGS: AITaggerSettings = {
@@ -42,5 +45,7 @@ export const DEFAULT_SETTINGS: AITaggerSettings = {
     tagRangeMatchMax: 5,
     tagRangeGenerateMax: 5,
     tagRangePredefinedMax: 5,
-    replaceTags: true
+    replaceTags: true,
+    batchTaggingFolder: '',
+    batchTaggingFolders: []
 };

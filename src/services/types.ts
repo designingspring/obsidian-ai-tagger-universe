@@ -30,6 +30,7 @@ export type LanguageCode =
 export interface LLMResponse {
     suggestedTags: string[];
     matchedExistingTags?: string[];
+    tags?: string[]; // Combined tags (suggestedTags + matchedExistingTags)
 }
 
 export interface LLMServiceConfig {
