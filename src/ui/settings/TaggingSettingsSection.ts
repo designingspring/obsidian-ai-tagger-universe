@@ -312,6 +312,36 @@ export class TaggingSettingsSection extends BaseSettingSection {
                     });
             });
 
+        // Blocked Tags Setting
+        new Setting(this.containerEl)
+            .setName('Blocked tags')
+            .setDesc('Tags that should never be suggested or used. Separate multiple tags with commas, spaces, or newlines.')
+            .addTextArea(textarea => {
+                const blockedTagsString = this.plugin.settings.blockedTags.join(', ');
+                
+                textarea
+                    .setValue(blockedTagsString)
+                    .setPlaceholder('tag1, tag2, tag3...')
+                    .onChange(async (value) => {
+                        // Parse the input text into an array of tags
+                        const tags = value
+                            .split(/[,\s\n]+/) // Split by commas, spaces, or newlines
+                            .map(tag => tag.trim())
+                            .filter(tag => tag.length > 0) // Remove empty tags
+                            .map(tag => tag.startsWith('#') ? tag : `#${tag}`); // Ensure all tags start with #
+                        
+                        // Update settings
+                        this.plugin.settings.blockedTags = tags;
+                        await this.plugin.saveSettings();
+                    });
+                
+                // Style the textarea
+                textarea.inputEl.style.minHeight = '80px';
+                textarea.inputEl.style.width = '100%';
+                
+                return textarea;
+            });
+
         // Batch Tagging Section
         const batchTaggingSetting = new Setting(this.containerEl)
             .setName('Batch tag files')

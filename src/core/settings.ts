@@ -25,6 +25,8 @@ export interface AITaggerSettings {
     batchTaggingFolder: string;
     /** Array of folder paths or regex patterns for batch tagging */
     batchTaggingFolders: string[];
+    /** Array of tags that should be blocked from being suggested */
+    blockedTags: string[];
 }
 
 export const DEFAULT_SETTINGS: AITaggerSettings = {
@@ -47,5 +49,6 @@ export const DEFAULT_SETTINGS: AITaggerSettings = {
     tagRangePredefinedMax: 5,
     replaceTags: true,
     batchTaggingFolder: '',
-    batchTaggingFolders: []
+    batchTaggingFolders: [],
+    blockedTags: []
 };

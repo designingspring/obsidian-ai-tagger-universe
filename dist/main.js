@@ -6273,7 +6273,8 @@ var DEFAULT_SETTINGS = {
   tagRangePredefinedMax: 5,
   replaceTags: true,
   batchTaggingFolder: "",
-  batchTaggingFolders: []
+  batchTaggingFolders: [],
+  blockedTags: []
 };
 
 // src/ui/settings/AITaggerSettingTab.ts
@@ -7738,6 +7739,17 @@ var TaggingSettingsSection = class extends BaseSettingSection {
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian10.Setting(this.containerEl).setName("Blocked tags").setDesc("Tags that should never be suggested or used. Separate multiple tags with commas, spaces, or newlines.").addTextArea((textarea) => {
+      const blockedTagsString = this.plugin.settings.blockedTags.join(", ");
+      textarea.setValue(blockedTagsString).setPlaceholder("tag1, tag2, tag3...").onChange(async (value) => {
+        const tags = value.split(/[,\s\n]+/).map((tag) => tag.trim()).filter((tag) => tag.length > 0).map((tag) => tag.startsWith("#") ? tag : `#${tag}`);
+        this.plugin.settings.blockedTags = tags;
+        await this.plugin.saveSettings();
+      });
+      textarea.inputEl.style.minHeight = "80px";
+      textarea.inputEl.style.width = "100%";
+      return textarea;
+    });
     const batchTaggingSetting = new import_obsidian10.Setting(this.containerEl).setName("Batch tag files").setDesc("All files matching these patterns will be tagged.");
     batchTaggingSetting.addButton(
       (button) => button.setButtonText("Manage").setCta().onClick(() => {
@@ -8733,7 +8745,25 @@ var AITaggerPlugin = class extends import_obsidian16.Plugin {
     const normalizedGeneratedTags = TagUtils.formatTags(hybridResult.suggestedTags || []);
     const normalizedMatchedTags = TagUtils.formatTags(hybridResult.matchedExistingTags || []);
     const allTags = TagUtils.mergeTags(normalizedGeneratedTags, normalizedMatchedTags);
-    return { tags: allTags };
+    const filteredTags = this.filterBlockedTags(allTags);
+    return { tags: filteredTags };
+  }
+  /**
+   * Filters out tags that are in the block list
+   * @param tags List of tags to filter
+   * @returns Filtered list of tags with blocked tags removed
+   */
+  filterBlockedTags(tags) {
+    if (!this.settings.blockedTags || this.settings.blockedTags.length === 0) {
+      return tags;
+    }
+    const formattedBlockedTags = this.settings.blockedTags.map(
+      (tag) => tag.startsWith("#") ? tag.toLowerCase() : `#${tag.toLowerCase()}`
+    );
+    return tags.filter((tag) => {
+      const formattedTag = tag.startsWith("#") ? tag.toLowerCase() : `#${tag.toLowerCase()}`;
+      return !formattedBlockedTags.includes(formattedTag);
+    });
   }
   /**
    * Analyzes note content and applies tags
@@ -8816,6 +8846,7 @@ var AITaggerPlugin = class extends import_obsidian16.Plugin {
         const matchedTags = analysis.matchedExistingTags || [];
         allTags = [...suggestedTags, ...matchedTags];
       }
+      allTags = this.filterBlockedTags(allTags);
       if (allTags.length > 0) {
         return await TagUtils.updateNoteTags(
           this.app,
