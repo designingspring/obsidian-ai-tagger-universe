@@ -25,6 +25,8 @@ export interface AITaggerSettings {
     batchTaggingFolder: string;
     /** Array of folder paths or regex patterns for batch tagging */
     batchTaggingFolders: string[];
+    /** Array of tags that should be blocked from being suggested */
+    blockedTags: string[];
 }
 
 export const DEFAULT_SETTINGS: AITaggerSettings = {
@@ -34,7 +36,7 @@ export const DEFAULT_SETTINGS: AITaggerSettings = {
     localServiceType: 'ollama',
     cloudEndpoint: 'https://api.openai.com/v1/chat/completions',
     cloudApiKey: '',
-    cloudModel: 'gpt-4',
+    cloudModel: 'gpt-4.1',
     cloudServiceType: 'openai',
     taggingMode: TaggingMode.GenerateNew,
     excludedFolders: [],
@@ -47,5 +49,6 @@ export const DEFAULT_SETTINGS: AITaggerSettings = {
     tagRangePredefinedMax: 5,
     replaceTags: true,
     batchTaggingFolder: '',
-    batchTaggingFolders: []
+    batchTaggingFolders: [],
+    blockedTags: []
 };

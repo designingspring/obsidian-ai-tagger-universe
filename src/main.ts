@@ -376,7 +376,33 @@ export default class AITaggerPlugin extends Plugin {
         // Use TagUtils.mergeTags to combine and deduplicate
         const allTags = TagUtils.mergeTags(normalizedGeneratedTags, normalizedMatchedTags);
         
-        return { tags: allTags };
+        // Filter out blocked tags
+        const filteredTags = this.filterBlockedTags(allTags);
+        
+        return { tags: filteredTags };
+    }
+
+    /**
+     * Filters out tags that are in the block list
+     * @param tags List of tags to filter
+     * @returns Filtered list of tags with blocked tags removed
+     */
+    public filterBlockedTags(tags: string[]): string[] {
+        // If no blocked tags are configured, return the original list
+        if (!this.settings.blockedTags || this.settings.blockedTags.length === 0) {
+            return tags;
+        }
+
+        // Format the blocked tags to ensure consistent comparison
+        const formattedBlockedTags = this.settings.blockedTags.map(tag => 
+            tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`
+        );
+
+        // Filter out any tags that match the blocked list
+        return tags.filter(tag => {
+            const formattedTag = tag.startsWith('#') ? tag.toLowerCase() : `#${tag.toLowerCase()}`;
+            return !formattedBlockedTags.includes(formattedTag);
+        });
     }
 
     /**
@@ -482,6 +508,9 @@ export default class AITaggerPlugin extends Plugin {
                 const matchedTags = analysis.matchedExistingTags || [];
                 allTags = [...suggestedTags, ...matchedTags];
             }
+            
+            // Filter out blocked tags
+            allTags = this.filterBlockedTags(allTags);
             
             // If there are tags to add, update the note
             if (allTags.length > 0) {
