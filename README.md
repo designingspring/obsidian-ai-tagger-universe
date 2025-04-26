@@ -22,12 +22,6 @@ This plugin needs to be built before installation:
 8. Restart Obsidian or reload the app
 9. Go to Settings > Community plugins, and enable "AI Tagger Universe"
 
-Alternatively, you can use the BRAT (Beta Reviewers Auto-update Tool) plugin:
-1. Install BRAT from Obsidian Community Plugins
-2. Open BRAT settings and add this repository URL
-3. Click "Add Plugin" and install when prompted
-4. Enable the plugin in Community plugins settings
-
 ## ✨ Key Features
 
 ### 🤖 Flexible AI Integration

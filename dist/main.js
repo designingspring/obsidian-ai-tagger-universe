@@ -6260,7 +6260,7 @@ var DEFAULT_SETTINGS = {
   localServiceType: "ollama",
   cloudEndpoint: "https://api.openai.com/v1/chat/completions",
   cloudApiKey: "",
-  cloudModel: "gpt-4",
+  cloudModel: "gpt-4.1",
   cloudServiceType: "openai",
   taggingMode: "generate" /* GenerateNew */,
   excludedFolders: [],
@@ -7738,7 +7738,6 @@ var TaggingSettingsSection = class extends BaseSettingSection {
         await this.plugin.saveSettings();
       });
     });
-    this.containerEl.createEl("h3", { text: "Batch Tagging" });
     const batchTaggingSetting = new import_obsidian10.Setting(this.containerEl).setName("Batch tag files").setDesc("All files matching these patterns will be tagged.");
     batchTaggingSetting.addButton(
       (button) => button.setButtonText("Manage").setCta().onClick(() => {

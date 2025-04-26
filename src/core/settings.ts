@@ -34,7 +34,7 @@ export const DEFAULT_SETTINGS: AITaggerSettings = {
     localServiceType: 'ollama',
     cloudEndpoint: 'https://api.openai.com/v1/chat/completions',
     cloudApiKey: '',
-    cloudModel: 'gpt-4',
+    cloudModel: 'gpt-4.1',
     cloudServiceType: 'openai',
     taggingMode: TaggingMode.GenerateNew,
     excludedFolders: [],

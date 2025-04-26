@@ -313,8 +313,6 @@ export class TaggingSettingsSection extends BaseSettingSection {
             });
 
         // Batch Tagging Section
-        this.containerEl.createEl('h3', { text: 'Batch Tagging' });
-        
         const batchTaggingSetting = new Setting(this.containerEl)
             .setName('Batch tag files')
             .setDesc('All files matching these patterns will be tagged.');
